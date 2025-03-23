@@ -99,7 +99,7 @@ func (a *Account) IsSessionValid() bool {
 func (cli *OpCLI) GetAccountDetails() ([]Account, error) {
 	slog.Debug("retrieving 1Password account details")
 
-	output, err := exec.Command(cli.path, "account", "list", "--format=json").Output()
+	output, err := exec.Command(cli.Path, "account", "list", "--format=json").Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list accounts: %v", err)
 	}

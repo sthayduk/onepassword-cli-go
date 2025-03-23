@@ -2,6 +2,7 @@ package onepassword
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -15,7 +16,7 @@ import (
 
 // OpCLI represents the 1Password CLI executor
 type OpCLI struct {
-	path        string
+	Path        string
 	cache       itemCache
 	logger      slog.Logger
 	accesstoken string
@@ -42,6 +43,20 @@ type itemCache struct {
 	initialized bool
 }
 
+func NewOpCLI() *OpCLI {
+
+	// Find the 1Password CLI executable
+	opPath, err := FindOpExecutable()
+	if err != nil {
+		slog.Error("1Password CLI not found", "error", err)
+	}
+
+	return &OpCLI{
+		Path:  opPath,
+		cache: itemCache{items: make(map[string]*Item)},
+	}
+}
+
 // FindOpExecutable searches for the "op" executable in the system's PATH.
 // It iterates through each directory in the PATH environment variable and checks
 // if the "op" executable exists and is not a directory. On Windows, it appends
@@ -66,30 +81,21 @@ func FindOpExecutable() (string, error) {
 	return "", fmt.Errorf("no valid op executable found in PATH")
 }
 
-// TestOpCli checks if the 1Password CLI executable is available and functional
-// by running the "--version" command.
+// TestOpCli verifies the availability of the 1Password CLI by executing the
+// "--version" command using the provided path to the CLI executable.
+// It returns an error if the command fails to execute or the CLI is not found.
 //
 // Parameters:
 //   - opPath: The file path to the 1Password CLI executable.
 //
 // Returns:
-//   - A boolean indicating whether the CLI is functional (true) or not (false).
-//   - An error if the command execution fails.
-//
-// Example usage:
-//
-//	isAvailable, err := TestOpCli("/path/to/op")
-//	if err != nil {
-//	    log.Fatalf("Error checking 1Password CLI: %v", err)
-//	}
-//	if isAvailable {
-//	    fmt.Println("1Password CLI is available.")
-//	}
-func TestOpCli(opPath string) (bool, error) {
+//   - error: An error if the CLI is unavailable or the command execution fails,
+//     otherwise nil.
+func TestOpCli(opPath string) error {
 	if err := exec.Command(opPath, "--version").Run(); err != nil {
-		return false, err
+		return err
 	}
-	return true, nil
+	return nil
 }
 
 // VerifyOpExecutable verifies the digital signature of the specified executable file
@@ -178,27 +184,23 @@ func VerifyOpExecutable(path string) error {
 // that password authentication is required, it prompts the user for a password and
 // retries the sign-in process.
 //
-// Upon successful sign-in, the session token is extracted and stored in an environment
-// variable named "OP_SESSION_<UserUUID>", where <UserUUID> is the unique identifier
-// of the account.
+// Upon successful sign-in, the session token is stored in an environment variable
+// and the account's sign-in information is updated.
 //
 // Parameters:
-//   - account: An Account struct containing the details of the 1Password account to sign in to.
+//   - ctx: The context for managing the command execution lifecycle.
+//   - account: A pointer to the Account struct containing the account details.
 //
 // Returns:
-//   - error: An error if the sign-in process fails, or nil if the sign-in is successful.
-//
-// Logs:
-//   - Debug logs for each step of the sign-in process, including attempts and failures.
-//   - Info logs upon successful connection to the 1Password account.
-func (cli *OpCLI) SignIn(account *Account) error {
+//   - An error if the sign-in process fails, or nil if the sign-in is successful.
+func (cli *OpCLI) SignIn(ctx context.Context, account *Account) error {
 	slog.Debug("attempting to sign in to 1Password")
 
 	slog.Debug("signing in to account",
 		"account", account.UserUUID,
 		"email", account.Email)
 
-	signinCmd := exec.Command(cli.path, "signin", "--account", account.UserUUID, "--raw")
+	signinCmd := exec.CommandContext(ctx, cli.Path, "signin", "--account", account.UserUUID, "--raw")
 	var stderr bytes.Buffer
 	var stdout bytes.Buffer
 	signinCmd.Stderr = &stderr
@@ -213,10 +215,11 @@ func (cli *OpCLI) SignIn(account *Account) error {
 			if err := os.Setenv("OP_SESSION_"+account.UserUUID, sessionToken); err != nil {
 				return fmt.Errorf("failed to set session token: %v", err)
 			}
-			slog.Debug("passwordless signin successful", "sessionToken", sessionToken)
-			account.SetSignInInfo(sessionToken)
-			cli.Account = account
 		}
+
+		slog.Debug("passwordless signin successful", "sessionToken", sessionToken)
+		account.SetSignInInfo(sessionToken)
+		cli.Account = account
 
 		slog.Info("connected to 1Password", "url", account.URL, "email", account.Email)
 		return nil
@@ -234,7 +237,7 @@ func (cli *OpCLI) SignIn(account *Account) error {
 			return fmt.Errorf("error reading password: %v", err)
 		}
 
-		cmd := exec.Command(cli.path, "signin", "--account", account.UserUUID, "--raw")
+		cmd := exec.CommandContext(ctx, cli.Path, "signin", "--account", account.UserUUID, "--raw")
 		cmd.Stdin = strings.NewReader(password)
 		output, err := cmd.Output()
 		if err != nil {
@@ -310,7 +313,7 @@ func (cli *OpCLI) Execute(args ...string) ([]byte, error) {
 		cmdArgs = args
 	}
 
-	cmd := exec.Command(cli.path, cmdArgs...)
+	cmd := exec.Command(cli.Path, cmdArgs...)
 
 	// For non-interactive commands, capture stderr and return output
 	if !isInteractiveCommand(args) {
@@ -333,7 +336,7 @@ func (cli *OpCLI) Execute(args ...string) ([]byte, error) {
 			return nil, fmt.Errorf("error reading password: %v", err)
 		}
 
-		command := fmt.Sprintf("%s %s", cli.path, strings.Join(cmdArgs, " "))
+		command := fmt.Sprintf("%s %s", cli.Path, strings.Join(cmdArgs, " "))
 		signinCmd := cli.pipePasswordCommand(password, command)
 		return signinCmd.Output()
 	}
@@ -394,7 +397,7 @@ func isInteractiveCommand(args []string) bool {
 //   - The function logs errors using slog if it fails to create the stdin pipe
 //     or write the password to stdin.
 func (cli *OpCLI) pipePasswordCommand(password, command string) *exec.Cmd {
-	cmd := exec.Command(cli.path, strings.Fields(command)...)
+	cmd := exec.Command(cli.Path, strings.Fields(command)...)
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

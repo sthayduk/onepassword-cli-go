@@ -38,26 +38,22 @@ Ensure you have the 1Password CLI (`op`) installed and available in your system'
 package main
 
 import (
-	"log"
-	"github.com/sthayduk/onepassword-cli-go"
+    "log"
+    "github.com/sthayduk/onepassword-cli-go"
 )
 
 func main() {
-	opPath, err := onepassword.FindOpExecutable()
-	if err != nil {
-		log.Fatalf("Failed to find 1Password CLI: %v", err)
-	}
+    cli := onepassword.NewOpCLI()
+    
+    if err := onepassword.TestOpCli(cli.Path); err != nil {
+        log.Fatalf("1Password CLI is not functional: %v", err)
+    }
+    
+    if err := onepassword.VerifyOpExecutable(cli.Path); err != nil {
+        log.Fatalf("CLI verification failed: %v", err)
+    }
 
-	cli := &onepassword.OpCLI{
-		path: opPath,
-	}
-
-	isAvailable, err := onepassword.TestOpCli(opPath)
-	if err != nil || !isAvailable {
-		log.Fatalf("1Password CLI is not functional: %v", err)
-	}
-
-	log.Println("1Password CLI is ready to use.")
+    log.Println("1Password CLI is ready to use.")
 }
 ```
 
@@ -68,24 +64,25 @@ Retrieve account details:
 ```go
 accounts, err := cli.GetAccountDetails()
 if err != nil {
-	log.Fatalf("Failed to retrieve accounts: %v", err)
+    log.Fatalf("Failed to retrieve accounts: %v", err)
 }
 
 for _, account := range accounts {
-	log.Printf("Account: %s (%s)", account.Email, account.URL)
+    log.Printf("Account: %s (%s)", account.Email, account.URL)
 }
 ```
 
 Sign in to an account:
 
 ```go
-account := &onepassword.Account{
-	UserUUID: "your-user-uuid",
-	Email:    "your-email@example.com",
+ctx := context.Background()
+account, err := cli.GetAccountDetailsByEmail("your-email@example.com")
+if err != nil {
+    log.Fatalf("Failed to get account details: %v", err)
 }
 
-if err := cli.SignIn(account); err != nil {
-	log.Fatalf("Failed to sign in: %v", err)
+if err := cli.SignIn(ctx, account); err != nil {
+    log.Fatalf("Failed to sign in: %v", err)
 }
 
 log.Println("Signed in successfully!")
@@ -97,22 +94,28 @@ Define and interact with items:
 
 ```go
 item := onepassword.Item{
-	Title:    "Example Login",
-	Category: onepassword.CategoryLogin,
-	Fields: []onepassword.Field{
-		{
-			Label:   "Username",
-			Value:   "example_user",
-			Type:    onepassword.FieldTypeString,
-			Purpose: onepassword.PurposeUsername,
-		},
-		{
-			Label:   "Password",
-			Value:   "example_password",
-			Type:    onepassword.FieldTypeConcealed,
-			Purpose: onepassword.PurposePassword,
-		},
-	},
+    Title:    "Example Login",
+    Category: onepassword.CategoryLogin,
+    Vault: onepassword.Vault{
+        ID:   "vault-id",
+        Name: "Personal",
+    },
+    Fields: []onepassword.Field{
+        {
+            ID:      "username",
+            Label:   "Username",
+            Value:   "example_user",
+            Type:    onepassword.FieldTypeString,
+            Purpose: onepassword.PurposeUsername,
+        },
+        {
+            ID:      "password",
+            Label:   "Password",
+            Value:   "example_password",
+            Type:    onepassword.FieldTypeConcealed,
+            Purpose: onepassword.PurposePassword,
+        },
+    },
 }
 
 log.Printf("Created item: %s", item.Title)
