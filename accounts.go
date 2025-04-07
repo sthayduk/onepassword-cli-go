@@ -84,8 +84,8 @@ func (a *Account) IsSessionValid() bool {
 }
 
 // GetAccountDetails retrieves the details of all 1Password accounts configured
-// in the CLI. It executes the "op account list" command with JSON output format,
-// parses the result, and returns a slice of Account objects.
+// in the CLI. It executes the "op account list" command, parses the result,
+// and returns a slice of Account objects.
 //
 // Returns:
 //   - ([]Account): A slice of Account objects representing the 1Password accounts.

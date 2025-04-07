@@ -15,10 +15,13 @@
 
 - **Vault Management**:
   - Represent and interact with 1Password vaults.
+  - Retrieve vault details by ID or name.
+  - Validate vault IDs and update vault icons.
 
 - **CLI Integration**:
   - Execute 1Password CLI commands with support for interactive and non-interactive modes.
   - Verify the integrity of the 1Password CLI executable.
+  - Centralized command execution with automatic account flag inclusion.
 
 ## Installation
 
@@ -121,6 +124,44 @@ item := onepassword.Item{
 log.Printf("Created item: %s", item.Title)
 ```
 
+### Vault Management
+
+Retrieve vault details:
+
+```go
+vaults, err := cli.GetVaultDetails()
+if err != nil {
+    log.Fatalf("Failed to retrieve vaults: %v", err)
+}
+
+for _, vault := range vaults {
+    log.Printf("Vault: %s (%s)", vault.Name, vault.ID)
+}
+```
+
+Retrieve a specific vault by ID:
+
+```go
+vaultID := "your-vault-id"
+vault, err := cli.GetVaultDetailsByID(vaultID)
+if err != nil {
+    log.Fatalf("Failed to retrieve vault details: %v", err)
+}
+
+log.Printf("Vault Name: %s, Items: %d", vault.Name, vault.Items)
+```
+
+Update a vault icon:
+
+```go
+err := cli.UpdateVaultIcon(vaultID, onepassword.IconTreasureChest)
+if err != nil {
+    log.Fatalf("Failed to update vault icon: %v", err)
+}
+
+log.Println("Vault icon updated successfully!")
+```
+
 ## Development
 
 ### Project Structure
@@ -128,6 +169,7 @@ log.Printf("Created item: %s", item.Title)
 - `accounts.go`: Handles account-related operations, including sign-in and session management.
 - `client.go`: Provides the core CLI integration and command execution logic.
 - `items.go`: Defines structures and utilities for managing 1Password items.
+- `vaults.go`: Contains functions for vault-related operations.
 - `go.mod`: Specifies module dependencies.
 
 ### Dependencies

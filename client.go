@@ -17,16 +17,16 @@ import (
 // OpCLI represents the 1Password CLI executor
 type OpCLI struct {
 	Path        string
+	accesstoken string
 	cache       itemCache
 	logger      slog.Logger
-	accesstoken string
 	Account     *Account
 }
 
 // OpCliError represents an error from the 1Password CLI operations
 type OpCliError struct {
-	Err          error
 	StderrOutput string
+	Err          error
 }
 
 // Error returns the string representation of the CLI error
@@ -414,4 +414,38 @@ func (cli *OpCLI) pipePasswordCommand(password, command string) *exec.Cmd {
 	}()
 
 	return cmd
+}
+
+// ExecuteOpCommand centralizes the execution of 1Password CLI commands.
+// It takes the command arguments as input and handles execution, error handling, and logging.
+// Automatically appends the --account flag with the account ID to every command.
+func (cli *OpCLI) ExecuteOpCommand(args ...string) ([]byte, error) {
+	if cli.Account == nil || cli.Account.UserUUID == "" {
+		return nil, fmt.Errorf("account information is missing")
+	}
+
+	// Append --account and the account ID to the command arguments
+	args = append(args, "--account", cli.Account.UserUUID)
+
+	// Ensure --format=json is included in the arguments
+	if !containsArgument(args, "--format=json") {
+		args = append(args, "--format=json")
+	}
+
+	cmd := exec.Command(cli.Path, args...)
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute command '%v': %w", args, err)
+	}
+	return output, nil
+}
+
+// containsArgument checks if a specific argument exists in the provided arguments slice.
+func containsArgument(args []string, arg string) bool {
+	for _, a := range args {
+		if a == arg {
+			return true
+		}
+	}
+	return false
 }

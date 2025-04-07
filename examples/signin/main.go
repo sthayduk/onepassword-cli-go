@@ -39,7 +39,7 @@ func signin(ctx context.Context, log *log.Logger) error {
 	clt := onepassword.NewOpCLI()
 
 	// Get email from environment variable or use default
-	email := getEnv("OP_EMAIL", "stefan.hayduk@gmail.com")
+	email := getEnv("OP_EMAIL", "stefan.hayduk@itdesign.at")
 	log.Printf("Attempting to sign in with email: %s\n", email)
 
 	if err := onepassword.TestOpCli(clt.Path); err != nil {

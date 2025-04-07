@@ -37,17 +37,11 @@ const (
 	StrengthTerrible  PasswordStrength = "TERRIBLE"
 )
 
-// Vault represents a 1Password vault
-type Vault struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-}
-
 // ItemURL represents a URL associated with an item
 type ItemURL struct {
+	Href    string `json:"href"`
 	Label   string `json:"label"`
 	Primary bool   `json:"primary"`
-	Href    string `json:"href"`
 }
 
 // Section represents a section in an item
@@ -64,11 +58,11 @@ type PasswordDetails struct {
 // Field represents a field in a 1Password item with its type, purpose, and value
 type Field struct {
 	ID              string           `json:"id"`
+	Label           string           `json:"label"`
+	Value           string           `json:"value,omitempty"`
+	Reference       string           `json:"reference"`
 	Type            FieldType        `json:"type"`
 	Purpose         FieldPurpose     `json:"purpose,omitempty"`
-	Label           string           `json:"label"`
-	Value           string           `json:"value,omitempty"` // Value might not always be present
-	Reference       string           `json:"reference"`
 	Section         *Section         `json:"section,omitempty"`
 	PasswordDetails *PasswordDetails `json:"password_details,omitempty"`
 }
@@ -77,15 +71,15 @@ type Field struct {
 type Item struct {
 	ID             string    `json:"id"`
 	Title          string    `json:"title"`
-	Favorite       bool      `json:"favorite"`
-	Tags           []string  `json:"tags,omitempty"`
-	Version        int       `json:"version"`
+	LastEditedBy   string    `json:"last_edited_by"`
+	AdditionalInfo string    `json:"additional_information"`
 	Vault          Vault     `json:"vault"`
 	Category       Category  `json:"category"`
-	LastEditedBy   string    `json:"last_edited_by"`
+	Favorite       bool      `json:"favorite"`
+	Version        int       `json:"version"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
-	AdditionalInfo string    `json:"additional_information"`
+	Tags           []string  `json:"tags,omitempty"`
 	URLs           []ItemURL `json:"urls,omitempty"`
 	Sections       []Section `json:"sections,omitempty"`
 	Fields         []Field   `json:"fields,omitempty"`
