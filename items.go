@@ -56,8 +56,10 @@ type Section struct {
 
 // PasswordDetails contains password-specific information
 type PasswordDetails struct {
-	Strength PasswordStrength `json:"strength"`
-	History  []string         `json:"history,omitempty"`
+	Strength  PasswordStrength `json:"strength"`
+	History   []string         `json:"history,omitempty"`
+	Entropy   float64          `json:"entropy,omitempty"`
+	Generated bool             `json:"generated,omitempty"`
 }
 
 // Field represents a field in a 1Password item with its type, purpose, and value
@@ -70,6 +72,7 @@ type Field struct {
 	Purpose         FieldPurpose     `json:"purpose,omitempty"`
 	Section         *Section         `json:"section,omitempty"`
 	PasswordDetails *PasswordDetails `json:"password_details,omitempty"`
+	Entropy         float64          `json:"entropy,omitempty"`
 }
 
 // Item represents a 1Password item
@@ -90,6 +93,99 @@ type Item struct {
 	URLs           []ItemURL `json:"urls,omitempty"`
 	Sections       []Section `json:"sections,omitempty"`
 	Fields         []Field   `json:"fields,omitempty"`
+}
+
+// AddUserName adds or updates a username field in the item.
+//
+// Parameters:
+// - username: A string representing the username to add or update.
+//
+// This method checks if a username field already exists in the item. If it does,
+// it updates the value of the existing field. Otherwise, it creates a new username field
+// and appends it to the item's Fields slice.
+func (item *Item) AddUserName(username string) {
+	// Check if a username field already exists and update it
+	for i, field := range item.Fields {
+		if field.Purpose == PurposeUsername && field.Section != nil {
+			item.Fields[i].Value = username
+			return
+		}
+	}
+
+	// If no username field exists, create and add a new one
+	newField := Field{
+		ID:      "username",
+		Type:    FieldTypeString,
+		Purpose: PurposeUsername,
+		Label:   "username",
+		Value:   username,
+	}
+
+	item.Fields = append(item.Fields, newField)
+}
+
+// AddPassword adds or updates a password field in the item.
+//
+// Parameters:
+// - password: A string representing the password to add or update.
+//
+// This method checks if a password field already exists in the item. If it does,
+// it updates the value of the existing field. Otherwise, it creates a new password field
+// and appends it to the item's Fields slice.
+func (item *Item) AddPassword(password string) {
+	// Check if a password field already exists and update it
+	for i, field := range item.Fields {
+		if field.Purpose == PurposePassword && field.Section != nil {
+			item.Fields[i].Value = password
+			return
+		}
+	}
+	// If no password field exists, create and add a new one
+	newField := Field{
+		ID:      "password",
+		Type:    FieldTypeConcealed,
+		Purpose: PurposePassword,
+		Label:   "password",
+		Value:   password,
+	}
+	item.Fields = append(item.Fields, newField)
+}
+
+// AddNotes adds or updates a notes field in the item.
+//
+// Parameters:
+// - notes: A string representing the notes to add or update.
+//
+// This method checks if a notes field already exists in the item. If it does,
+// it updates the value of the existing field. Otherwise, it creates a new notes field
+// and appends it to the item's Fields slice.
+func (item *Item) AddNotes(notes string) {
+	// Check if a notes field already exists and update it
+	for i, field := range item.Fields {
+		if field.Purpose == PurposeNotes && field.Section != nil {
+			item.Fields[i].Value = notes
+			return
+		}
+	}
+	// If no notes field exists, create and add a new one
+	newField := Field{
+		ID:      "notes",
+		Type:    FieldTypeString,
+		Purpose: PurposeNotes,
+		Label:   "notes",
+		Value:   notes,
+	}
+	item.Fields = append(item.Fields, newField)
+}
+
+// AddTag adds a new tag to the item.
+//
+// Parameters:
+// - tag: A string representing the tag to add.
+//
+// This method appends the provided tag to the item's Tags slice.
+func (item *Item) AddTag(tag string) {
+	item.Tags = append(item.Tags, tag)
 }
 
 // Check if a section ID is unique within the item
@@ -211,6 +307,100 @@ func (item *Item) DeleteFieldFromSection(section Section, field Field) error {
 	return nil
 }
 
+// Save saves the current state of the item to the 1Password CLI.
+//
+// Returns:
+// - error: An error object if the operation fails.
+//
+// This method uses the UpdateItemWithStruct method of the OpCLI instance to
+// save the item. It ensures that the cli field and item ID are properly set
+// before attempting to save.
+func (item *Item) Save() error {
+	if item.cli == nil {
+		return fmt.Errorf("cli is nil, cannot save item")
+	}
+	if item.ID == "" {
+		return fmt.Errorf("item ID is empty, cannot save item")
+	}
+
+	// Use the new UpdateItemWithStruct method to save the item
+	if err := item.cli.UpdateItemWithStruct(*item); err != nil {
+		return fmt.Errorf("failed to save item: %v", err)
+	}
+
+	return nil
+}
+
+// Delete deletes the item from the 1Password CLI.
+//
+// Returns:
+// - error: An error object if the operation fails.
+//
+// This method uses the DeleteItem method of the OpCLI instance to delete the
+// item. It ensures that the cli field and item ID are properly set before
+// attempting to delete.
+func (item *Item) Delete() error {
+	if item.cli == nil {
+		return fmt.Errorf("cli is nil, cannot delete item")
+	}
+	if item.ID == "" {
+		return fmt.Errorf("item ID is empty, cannot delete item")
+	}
+
+	// Use the new DeleteItem method to delete the item
+	if err := item.cli.DeleteItem(*item); err != nil {
+		return fmt.Errorf("failed to delete item: %v", err)
+	}
+	return nil
+}
+
+// AddURL adds a new ItemURL to the item.
+//
+// Parameters:
+// - url: The ItemURL struct to be added to the item.
+//
+// This method appends the provided URL to the item's URLs slice. If the URL
+// is marked as primary, it ensures no other URL is marked as primary.
+func (item *Item) AddURL(url ItemURL) {
+	if url.Primary {
+		// Ensure no other URL is marked as primary
+		for i := range item.URLs {
+			item.URLs[i].Primary = false
+		}
+	}
+	item.URLs = append(item.URLs, url)
+}
+
+// RemoveURLs removes all ItemURLs from the item that match the given Href.
+//
+// Parameters:
+// - href: A string representing the Href of the URLs to remove.
+//
+// Returns:
+// - error: An error object if no URLs with the given Href are found.
+//
+// This method filters the item's URLs slice to exclude URLs that match the
+// provided Href.
+func (item *Item) RemoveURLs(href string) error {
+	updatedURLs := item.URLs[:0] // Create a new slice to hold non-matching URLs
+	found := false
+
+	for _, url := range item.URLs {
+		if url.Href == href {
+			found = true
+			continue // Skip URLs that match the Href
+		}
+		updatedURLs = append(updatedURLs, url)
+	}
+
+	if !found {
+		return fmt.Errorf("no URLs with href '%s' found", href)
+	}
+
+	item.URLs = updatedURLs
+	return nil
+}
+
 // ItemTemplate represents a 1Password item template
 type ItemTemplate struct {
 	UUID string `json:"uuid"`
@@ -258,7 +448,6 @@ func (cli *OpCLI) GetItems() (*[]Item, error) {
 // This method executes the "item get" command using the CLI and parses the
 // JSON output into an Item struct. It also populates the cli field for the item.
 func (cli *OpCLI) getItem(identifier string) (*Item, error) {
-
 	output, err := cli.ExecuteOpCommand("item", "get", identifier)
 	if err != nil {
 		return nil, err
@@ -303,13 +492,29 @@ func (cli *OpCLI) GetItemByID(itemID string) (*Item, error) {
 // GetItemTemplateByName retrieves an item template by its name.
 //
 // Parameters:
-// - templateName: An ItemTemplate struct representing the template to retrieve.
+// - templateName: A string representing the name of the template.
 //
 // Returns:
 // - *Item: A pointer to the Item struct containing the template's details.
 // - error: An error object if the operation fails.
-func (cli *OpCLI) GetItemTemplateByName(templateName ItemTemplate) (*Item, error) {
-	return cli.getItem(templateName.Name)
+//
+// This method executes the "item template get" command using the CLI and parses
+// the JSON output into an Item struct. It also populates the cli field for the item.
+func (cli *OpCLI) GetItemTemplateByName(templateName string) (*Item, error) {
+	output, err := cli.ExecuteOpCommand("item", "template", "get", templateName)
+	if err != nil {
+		return nil, err
+	}
+	var item Item
+	err = json.Unmarshal(output, &item)
+	if err != nil {
+		return nil, err
+	}
+
+	// Populate the cli field for the item
+	item.cli = cli
+
+	return &item, nil
 }
 
 // GetItemTemplates retrieves a list of all item templates using the 1Password CLI.
