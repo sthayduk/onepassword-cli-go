@@ -12,6 +12,8 @@
 - **Item Management**:
   - Define and manage 1Password items, including fields, sections, and URLs.
   - Support for various item categories (e.g., Login, Password, Secure Note).
+  - Add and delete sections within items, ensuring unique section IDs.
+  - Add and delete fields within specific sections, maintaining consistent state.
 
 - **Vault Management**:
   - Represent and interact with 1Password vaults.
@@ -122,6 +124,63 @@ item := onepassword.Item{
 }
 
 log.Printf("Created item: %s", item.Title)
+```
+
+#### Add a Section to an Item
+
+```go
+section := onepassword.Section{
+    ID:    "section-id",
+    Label: "Example Section",
+}
+
+err := item.AddSection(section)
+if err != nil {
+    log.Fatalf("Failed to add section: %v", err)
+}
+
+log.Println("Section added successfully!")
+```
+
+#### Delete a Section from an Item
+
+```go
+err := item.DeleteSection(section)
+if err != nil {
+    log.Fatalf("Failed to delete section: %v", err)
+}
+
+log.Println("Section deleted successfully!")
+```
+
+#### Add a Field to a Section
+
+```go
+field := onepassword.Field{
+    ID:      "field-id",
+    Label:   "Example Field",
+    Value:   "example_value",
+    Type:    onepassword.FieldTypeString,
+    Purpose: onepassword.PurposeNotes,
+}
+
+err := item.AddFieldToSection(section, field)
+if err != nil {
+    log.Fatalf("Failed to add field: %v", err)
+}
+
+log.Println("Field added successfully!")
+```
+
+#### Delete a Field from a Section
+
+```go
+err := item.DeleteFieldFromSection(section, field)
+if err != nil {
+    log.Fatalf("Failed to delete field: %v", err)
+}
+
+log.Println("Field deleted successfully!")
 ```
 
 ### Vault Management
