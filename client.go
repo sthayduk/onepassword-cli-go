@@ -3,6 +3,7 @@ package onepassword
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -448,4 +449,83 @@ func containsArgument(args []string, arg string) bool {
 		}
 	}
 	return false
+}
+
+// UpdateItemWithStruct updates an existing item in 1Password using the provided Item struct.
+//
+// Parameters:
+// - identifier: The unique identifier or name of the item to update.
+// - item: The Item struct containing the updated item data.
+//
+// Returns:
+// - error: An error object if the operation fails.
+//
+// This method uses the "op item edit" command to update the item.
+func (cli *OpCLI) UpdateItemWithStruct(item Item) error {
+	// Serialize the Item struct to JSON
+	jsonData, err := json.Marshal(item)
+	if err != nil {
+		return fmt.Errorf("failed to serialize item to JSON: %w", err)
+	}
+
+	// Execute the "op item edit" command
+	cmd := exec.Command(cli.Path, "item", "edit", item.ID)
+	cmd.Stdin = bytes.NewReader(jsonData)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to execute 'op item edit': %w", err)
+	}
+
+	return nil
+}
+
+// DeleteItem deletes an item by its ID using the 1Password CLI.
+//
+// Parameters:
+// - itemID: A string representing the unique identifier of the item to delete.
+//
+// Returns:
+// - error: An error object if the operation fails.
+func (cli *OpCLI) DeleteItem(item Item) error {
+	if item.ID == "" {
+		return fmt.Errorf("item ID cannot be empty")
+	}
+
+	_, err := cli.ExecuteOpCommand("item", "delete", item.ID)
+	if err != nil {
+		return fmt.Errorf("failed to delete item with ID '%s': %v", item.ID, err)
+	}
+
+	return nil
+}
+
+func (cli *OpCLI) CreateItem(item *Item, genPassword bool) error {
+
+	if item.ID != "" {
+		return fmt.Errorf("item ID should be empty for new items")
+	}
+
+	jsonData, err := json.Marshal(item)
+	if err != nil {
+		return fmt.Errorf("failed to serialize item to JSON: %w", err)
+	}
+
+	var cmd *exec.Cmd
+	if genPassword {
+		// Generate a password if required
+		cmd = exec.Command(cli.Path, "item", "create", "--generate-password")
+	} else {
+		cmd = exec.Command(cli.Path, "item", "create")
+	}
+	cmd.Stdin = bytes.NewReader(jsonData)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to execute 'op item create': %w", err)
+	}
+
+	return nil
 }

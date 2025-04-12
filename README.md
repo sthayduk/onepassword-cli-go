@@ -14,6 +14,9 @@
   - Support for various item categories (e.g., Login, Password, Secure Note).
   - Add and delete sections within items, ensuring unique section IDs.
   - Add and delete fields within specific sections, maintaining consistent state.
+  - Add and remove URLs associated with items.
+  - Save and delete items programmatically.
+  - Add tags to items for better organization.
 
 - **Vault Management**:
   - Represent and interact with 1Password vaults.
@@ -181,6 +184,69 @@ if err != nil {
 }
 
 log.Println("Field deleted successfully!")
+```
+
+#### Add and Remove URLs
+
+Add a URL to an item:
+
+```go
+newURL := onepassword.ItemURL{
+    Href:    "https://example.com",
+    Label:   "Example URL",
+    Primary: true,
+}
+item.AddURL(newURL)
+
+if err := item.Save(); err != nil {
+    log.Fatalf("Failed to save item: %v", err)
+}
+
+log.Println("Added new URL to item.")
+```
+
+Remove a URL from an item:
+
+```go
+err := item.RemoveURLs("https://example.com")
+if err != nil {
+    log.Fatalf("Failed to remove URL: %v", err)
+}
+
+if err := item.Save(); err != nil {
+    log.Fatalf("Failed to save item after URL removal: %v", err)
+}
+
+log.Println("Removed URL from item.")
+```
+
+#### Save and Delete Items
+
+Save an item:
+
+```go
+if err := item.Save(); err != nil {
+    log.Fatalf("Failed to save item: %v", err)
+}
+
+log.Println("Item saved successfully!")
+```
+
+Delete an item:
+
+```go
+if err := item.Delete(); err != nil {
+    log.Fatalf("Failed to delete item: %v", err)
+}
+
+log.Println("Item deleted successfully!")
+```
+
+#### Add Tags to an Item
+
+```go
+item.AddTag("example-tag")
+log.Println("Tag added successfully!")
 ```
 
 ### Vault Management
