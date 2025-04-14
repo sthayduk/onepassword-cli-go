@@ -64,10 +64,10 @@ type PasswordDetails struct {
 
 // Field represents a field in a 1Password item with its type, purpose, and value
 type Field struct {
-	ID              string           `json:"id"`
+	ID              string           `json:"id,omitempty"`
 	Label           string           `json:"label"`
 	Value           string           `json:"value,omitempty"`
-	Reference       string           `json:"reference"`
+	Reference       string           `json:"reference,omitempty"`
 	Type            FieldType        `json:"type"`
 	Purpose         FieldPurpose     `json:"purpose,omitempty"`
 	Section         *Section         `json:"section,omitempty"`
@@ -93,6 +93,13 @@ type Item struct {
 	URLs           []ItemURL `json:"urls,omitempty"`
 	Sections       []Section `json:"sections,omitempty"`
 	Fields         []Field   `json:"fields,omitempty"`
+}
+
+// ToJSON converts the Item struct into a JSON-encoded byte slice.
+// It returns the JSON representation of the item or an error if the
+// marshaling process fails.
+func (item *Item) ToJSON() ([]byte, error) {
+	return json.Marshal(item)
 }
 
 // AddUserName adds or updates a username field in the item.
@@ -178,12 +185,133 @@ func (item *Item) AddNotes(notes string) {
 	item.Fields = append(item.Fields, newField)
 }
 
-// AddTag adds a new tag to the item.
+// GetFieldByID retrieves a field by its ID.
+//
+// Parameters:
+// - fieldID: A string representing the unique identifier of the field.
+//
+// Returns:
+// - *Field: A pointer to the Field struct if found.
+// - error: An error object if the field is not found.
+func (item *Item) GetFieldByID(fieldID string) (*Field, error) {
+	for _, field := range item.Fields {
+		if field.ID == fieldID {
+			return &field, nil
+		}
+	}
+	return nil, fmt.Errorf("Field with ID '%s' not found", fieldID)
+}
+
+// GetFieldsByLabel retrieves fields by their label.
+//
+// Parameters:
+// - fieldLabel: A string representing the label of the fields to retrieve.
+//
+// Returns:
+// - []*Field: A slice of pointers to Field structs matching the label.
+// - error: An error object if no fields with the given label are found.
+func (item *Item) GetFieldsByLabel(fieldLabel string) ([]*Field, error) {
+	var fields []*Field
+
+	for _, field := range item.Fields {
+		if field.Label == fieldLabel {
+			fields = append(fields, &field)
+		}
+	}
+
+	if len(fields) > 0 {
+		return fields, nil
+	}
+
+	return nil, fmt.Errorf("Field with Label '%s' not found", fieldLabel)
+}
+
+// GetFieldsByPurpose retrieves fields by their purpose.
+//
+// Parameters:
+// - fieldPurpose: A FieldPurpose value representing the purpose of the fields to retrieve.
+//
+// Returns:
+// - []*Field: A slice of pointers to Field structs matching the purpose.
+// - error: An error object if no fields with the given purpose are found.
+func (item *Item) GetFieldsByPurpose(fieldPurpose FieldPurpose) ([]*Field, error) {
+	var fields []*Field
+	for _, field := range item.Fields {
+		if field.Purpose == fieldPurpose {
+			fields = append(fields, &field)
+		}
+	}
+
+	if len(fields) > 0 {
+		return fields, nil
+	}
+
+	return nil, fmt.Errorf("Field with Purpose '%s' not found", fieldPurpose)
+}
+
+// NewField creates a new Field instance with the specified label, value, and type.
+//
+// Parameters:
+// - label: A string representing the label of the field.
+// - value: A string representing the value of the field.
+// - fieldType: A FieldType value representing the type of the field.
+//
+// Returns:
+// - Field: A new Field struct initialized with the provided parameters.
+func (item *Item) NewField(label, value string, fieldType FieldType) Field {
+	return Field{
+		Label: label,
+		Value: value,
+		Type:  fieldType,
+	}
+}
+
+// AddField appends a new field to the item's Fields slice.
+//
+// Parameters:
+// - field: The Field struct to be added to the item.
+func (item *Item) AddField(field Field) {
+	item.Fields = append(item.Fields, field)
+}
+
+// RemoveField removes a field from the item by its ID.
+//
+// Parameters:
+// - field: The Field struct to be removed from the item.
+//
+// Returns:
+// - error: An error object if the field with the specified ID is not found.
+func (item *Item) RemoveField(field Field) error {
+	for i, f := range item.Fields {
+		if f.ID == field.ID {
+			item.Fields = append(item.Fields[:i], item.Fields[i+1:]...)
+			return nil
+		}
+	}
+	return fmt.Errorf("Field with ID '%s' not found", field.ID)
+}
+
+// RemoveTag removes a tag from the item by its name.
+//
+// Parameters:
+// - tag: A string representing the name of the tag to remove.
+//
+// Returns:
+// - error: An error object if the tag with the specified name is not found.
+func (item *Item) RemoveTag(tag string) error {
+	for i, t := range item.Tags {
+		if t == tag {
+			item.Tags = append(item.Tags[:i], item.Tags[i+1:]...)
+			return nil
+		}
+	}
+	return fmt.Errorf("Tag '%s' not found", tag)
+}
+
+// AddTag appends a new tag to the item's Tags slice.
 //
 // Parameters:
 // - tag: A string representing the tag to add.
-//
-// This method appends the provided tag to the item's Tags slice.
 func (item *Item) AddTag(tag string) {
 	item.Tags = append(item.Tags, tag)
 }
@@ -222,7 +350,7 @@ func (item *Item) AddSection(section Section) error {
 //
 // This method ensures that all fields associated with the section are removed
 // before deleting the section itself to maintain a consistent state.
-func (item *Item) DeleteSection(section Section) {
+func (item *Item) DeleteSection(section Section) error {
 
 	// Remove all fields associated with the section before deleting the section
 	// This is important to avoid dangling references
@@ -230,7 +358,11 @@ func (item *Item) DeleteSection(section Section) {
 	// when the section is deleted
 	for _, field := range item.Fields {
 		if field.Section != nil && field.Section.ID == section.ID {
-			item.DeleteFieldFromSection(section, field)
+
+			err := item.DeleteFieldFromSection(section, field)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -240,9 +372,11 @@ func (item *Item) DeleteSection(section Section) {
 			break
 		}
 	}
+
+	return nil
 }
 
-// AddFieldToSection adds a field to a specific section in the item.
+// AddFieldToSection adds a new field to a specific section in the item.
 //
 // Parameters:
 // - section: The Section struct where the field will be added.
@@ -273,6 +407,42 @@ func (item *Item) AddFieldToSection(section Section, field Field) error {
 	}
 
 	return nil
+}
+
+// MoveFieldToSection moves a field to a specific section in the item.
+//
+// Parameters:
+// - field: The Field struct to be moved.
+// - section: The Section struct where the field will be moved.
+//
+// Returns:
+// - error: An error object if the section is not found in the item.
+//
+// This method associates the field with the specified section and updates its Section reference.
+// If the section is not found, it returns an error.
+func (item *Item) MoveFieldToSection(field Field, section Section) error {
+	// Find the section in the item
+	var foundSection *Section
+	for i := range item.Sections {
+		if item.Sections[i].ID == section.ID && item.Sections[i].Label == section.Label {
+			foundSection = &item.Sections[i]
+			break
+		}
+	}
+
+	if foundSection == nil {
+		return fmt.Errorf("Section not found in item")
+	}
+
+	// Find the field in the item and update its section
+	for i := range item.Fields {
+		if item.Fields[i].ID == field.ID {
+			item.Fields[i].Section = foundSection
+			return nil
+		}
+	}
+
+	return fmt.Errorf("Field not found in item")
 }
 
 // DeleteFieldFromSection removes a field from a specific section in the item.
@@ -324,7 +494,8 @@ func (item *Item) Save() error {
 	}
 
 	// Use the new UpdateItemWithStruct method to save the item
-	if err := item.cli.UpdateItemWithStruct(*item); err != nil {
+	item, err := item.cli.updateItemWithStruct(*item)
+	if err != nil {
 		return fmt.Errorf("failed to save item: %v", err)
 	}
 
@@ -348,7 +519,7 @@ func (item *Item) Delete() error {
 	}
 
 	// Use the new DeleteItem method to delete the item
-	if err := item.cli.DeleteItem(*item); err != nil {
+	if err := item.cli.deleteItem(*item); err != nil {
 		return fmt.Errorf("failed to delete item: %v", err)
 	}
 	return nil
@@ -377,11 +548,15 @@ func (item *Item) AddURL(url ItemURL) {
 // - href: A string representing the Href of the URLs to remove.
 //
 // Returns:
-// - error: An error object if no URLs with the given Href are found.
+// - error: An error object if no URLs with the given Href are found or if the last URL cannot be deleted.
 //
-// This method filters the item's URLs slice to exclude URLs that match the
-// provided Href.
+// Note: The 1Password CLI has a known issue where the last URL cannot be deleted. This method will
+// return an error if attempting to delete the last remaining URL.
 func (item *Item) RemoveURLs(href string) error {
+	if len(item.URLs) == 1 {
+		return fmt.Errorf("cannot delete the last URL due to a known issue in the 1Password CLI")
+	}
+
 	updatedURLs := item.URLs[:0] // Create a new slice to hold non-matching URLs
 	found := false
 

@@ -52,7 +52,7 @@ func main() {
 	itemTemplate.Title = "Example Item"
 	itemTemplate.AddUserName("exampleuser")
 
-	if err := cli.CreateItem(itemTemplate, true); err != nil {
+	if _, err := cli.CreateItem(itemTemplate, true); err != nil {
 		log.Fatalf("Failed to create item from template: %v", err)
 	}
 
@@ -112,6 +112,41 @@ func main() {
 	}
 
 	fmt.Println("Removed selected URLs from item.")
+
+	// Example: Add a new section and fields to an item
+	newSection := onepassword.Section{
+		ID:    "example-section",
+		Label: "Example Section",
+	}
+
+	if err := item.AddSection(newSection); err != nil {
+		log.Fatalf("Failed to add section: %v", err)
+	}
+
+	newField := item.NewField("Example Field", "Example Value", onepassword.FieldTypeConcealed)
+
+	item.AddField(newField)
+
+	if err := item.AddFieldToSection(newSection, newField); err != nil {
+		log.Fatalf("Failed to add field to section: %v", err)
+	}
+
+	if err := item.Save(); err != nil {
+		log.Fatalf("Failed to save item after adding section and field: %v", err)
+	}
+
+	fmt.Println("Added new section and field to item.")
+
+	// Example: Remove a section and its fields from an item
+	if err := item.DeleteSection(newSection); err != nil {
+		log.Fatalf("Failed to delete section: %v", err)
+	}
+
+	if err := item.Save(); err != nil {
+		log.Fatalf("Failed to save item after deleting section: %v", err)
+	}
+
+	fmt.Println("Deleted section and its fields from item.")
 
 	// Example: Delete an item
 	if err := item.Delete(); err != nil {
