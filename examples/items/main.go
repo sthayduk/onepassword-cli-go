@@ -102,7 +102,7 @@ func main() {
 	// Example: Remove some URLs from an item
 	urlsToRemove := []string{"https://example.com"}
 	for _, url := range urlsToRemove {
-		if err := item.RemoveURLs(url); err != nil {
+		if err := item.DeleteURLs(url); err != nil {
 			log.Fatalf("Failed to remove URL %s: %v", url, err)
 		}
 	}
@@ -147,6 +147,23 @@ func main() {
 	}
 
 	fmt.Println("Deleted section and its fields from item.")
+
+	// Add Tag to item
+	item.AddTag("example-tag")
+	item.AddTag("example-tag-2/credit-card")
+	if err := item.Save(); err != nil {
+		log.Fatalf("Failed to save item after adding tags: %v", err)
+	}
+	fmt.Println("Added tags to item.")
+
+	// Example: Remove a tag from an item
+	if err := item.DeleteTag("example-tag"); err != nil {
+		log.Fatalf("Failed to remove tag: %v", err)
+	}
+	if err := item.Save(); err != nil {
+		log.Fatalf("Failed to save item after removing tag: %v", err)
+	}
+	fmt.Println("Removed tag from item.")
 
 	// Example: Delete an item
 	if err := item.Delete(); err != nil {

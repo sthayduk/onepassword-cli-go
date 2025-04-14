@@ -11,7 +11,7 @@
 
 - **Item Management**:
   - Define and manage 1Password items, including fields, sections, and URLs.
-  - Support for various item categories (e.g., Login, Password, Secure Note).
+  - Support for various item categories (e.g., Login, Password, Secure Note, Identity).
   - Add and delete sections within items, ensuring unique section IDs.
   - Add and delete fields within specific sections, maintaining consistent state.
   - Add and remove URLs associated with items.
@@ -114,14 +114,14 @@ item := onepassword.Item{
             Label:   "Username",
             Value:   "example_user",
             Type:    onepassword.FieldTypeString,
-            Purpose: onepassword.PurposeUsername,
+            Purpose: onepassword.FieldPurposeUsername,
         },
         {
             ID:      "password",
             Label:   "Password",
             Value:   "example_password",
             Type:    onepassword.FieldTypeConcealed,
-            Purpose: onepassword.PurposePassword,
+            Purpose: onepassword.FieldPurposePassword,
         },
     },
 }
@@ -164,7 +164,7 @@ field := onepassword.Field{
     Label:   "Example Field",
     Value:   "example_value",
     Type:    onepassword.FieldTypeString,
-    Purpose: onepassword.PurposeNotes,
+    Purpose: onepassword.FieldPurposeNotes,
 }
 
 err := item.AddFieldToSection(section, field)
@@ -208,7 +208,7 @@ log.Println("Added new URL to item.")
 Remove a URL from an item:
 
 ```go
-err := item.RemoveURLs("https://example.com")
+err := item.DeleteURLs("https://example.com")
 if err != nil {
     log.Fatalf("Failed to remove URL: %v", err)
 }
@@ -295,6 +295,7 @@ log.Println("Vault icon updated successfully!")
 - `client.go`: Provides the core CLI integration and command execution logic.
 - `items.go`: Defines structures and utilities for managing 1Password items.
 - `vaults.go`: Contains functions for vault-related operations.
+- `examples/`: Contains example programs demonstrating library usage.
 - `go.mod`: Specifies module dependencies.
 
 ### Dependencies

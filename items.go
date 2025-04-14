@@ -20,17 +20,32 @@ const (
 type FieldType string
 
 const (
-	FieldTypeString    FieldType = "STRING"
-	FieldTypeConcealed FieldType = "CONCEALED"
+	FieldTypeString    FieldType = "STRING"     // A text string.
+	FieldTypeConcealed FieldType = "CONCEALED"  // A concealed password.
+	FieldTypeEmail     FieldType = "EMAIL"      // An email address.
+	FieldTypeURL       FieldType = "URL"        // A web address to copy or open in your default web browser, not used for autofill behavior. Use the --url flag to set the website where 1Password suggests and fills a Login, Password, or API Credential item.
+	FieldTypeDate      FieldType = "DATE"       // A date with the format YYYY-MM-DD.
+	FieldTypeMonthYear FieldType = "MONTH_YEAR" // A date with the format YYYYMM or YYYY/MM.
+	FieldTypePhone     FieldType = "PHONE"      // A phone number.
+	FieldTypeOTP       FieldType = "OTP"        // A one-time password. Accepts an otpauth:// URI as the value.
+	FieldTypeFile      FieldType = "N/A"        // A file attachment. Accepts the path to the file as the value. Can only be added with assignment statements.
 )
 
 // FieldPurpose represents the purpose of a field
 type FieldPurpose string
 
 const (
-	PurposeUsername FieldPurpose = "USERNAME"
-	PurposePassword FieldPurpose = "PASSWORD"
-	PurposeNotes    FieldPurpose = "NOTES"
+	FieldPurposeUsername  FieldPurpose = "username"  // A username.
+	FieldPurposeNotes     FieldPurpose = "notes"     // A notes field.
+	FieldPurposePassword  FieldPurpose = "password"  // A concealed password.
+	FieldPurposeText      FieldPurpose = "text"      // A text string.
+	FieldPurposeEmail     FieldPurpose = "email"     // An email address.
+	FieldPurposeURL       FieldPurpose = "url"       // A web address to copy or open in your default web browser, not used for autofill behavior. Use the --url flag to set the website where 1Password suggests and fills a Login, Password, or API Credential item.
+	FieldPurposeDate      FieldPurpose = "date"      // A date with the format YYYY-MM-DD.
+	FieldPurposeMonthYear FieldPurpose = "monthyear" // A date with the format YYYYMM or YYYY/MM.
+	FieldPurposePhone     FieldPurpose = "phone"     // A phone number.
+	FieldPurposeOTP       FieldPurpose = "otp"       // A one-time password. Accepts an otpauth:// URI as the value.
+	FieldPurposeFile      FieldPurpose = "file"      // A file attachment. Accepts the path to the file as the value. Can only be added with assignment statements.
 )
 
 // PasswordStrength represents password strength levels
@@ -113,7 +128,7 @@ func (item *Item) ToJSON() ([]byte, error) {
 func (item *Item) AddUserName(username string) {
 	// Check if a username field already exists and update it
 	for i, field := range item.Fields {
-		if field.Purpose == PurposeUsername && field.Section != nil {
+		if field.Purpose == FieldPurposeUsername && field.Section != nil {
 			item.Fields[i].Value = username
 			return
 		}
@@ -123,7 +138,7 @@ func (item *Item) AddUserName(username string) {
 	newField := Field{
 		ID:      "username",
 		Type:    FieldTypeString,
-		Purpose: PurposeUsername,
+		Purpose: FieldPurposeUsername,
 		Label:   "username",
 		Value:   username,
 	}
@@ -142,7 +157,7 @@ func (item *Item) AddUserName(username string) {
 func (item *Item) AddPassword(password string) {
 	// Check if a password field already exists and update it
 	for i, field := range item.Fields {
-		if field.Purpose == PurposePassword && field.Section != nil {
+		if field.Purpose == FieldPurposePassword && field.Section != nil {
 			item.Fields[i].Value = password
 			return
 		}
@@ -151,7 +166,7 @@ func (item *Item) AddPassword(password string) {
 	newField := Field{
 		ID:      "password",
 		Type:    FieldTypeConcealed,
-		Purpose: PurposePassword,
+		Purpose: FieldPurposePassword,
 		Label:   "password",
 		Value:   password,
 	}
@@ -169,7 +184,7 @@ func (item *Item) AddPassword(password string) {
 func (item *Item) AddNotes(notes string) {
 	// Check if a notes field already exists and update it
 	for i, field := range item.Fields {
-		if field.Purpose == PurposeNotes && field.Section != nil {
+		if field.Purpose == FieldPurposeNotes && field.Section != nil {
 			item.Fields[i].Value = notes
 			return
 		}
@@ -178,7 +193,7 @@ func (item *Item) AddNotes(notes string) {
 	newField := Field{
 		ID:      "notes",
 		Type:    FieldTypeString,
-		Purpose: PurposeNotes,
+		Purpose: FieldPurposeNotes,
 		Label:   "notes",
 		Value:   notes,
 	}
@@ -200,6 +215,15 @@ func (item *Item) GetFieldByID(fieldID string) (*Field, error) {
 		}
 	}
 	return nil, fmt.Errorf("Field with ID '%s' not found", fieldID)
+}
+
+// SetFavorite sets the favorite status of the item.
+// It updates the Favorite field of the Item struct to the specified boolean value.
+//
+// Parameters:
+//   - favorite: A boolean value indicating whether the item should be marked as a favorite.
+func (item *Item) SetAsFavorite(favorite bool) {
+	item.Favorite = favorite
 }
 
 // GetFieldsByLabel retrieves fields by their label.
@@ -274,14 +298,18 @@ func (item *Item) AddField(field Field) {
 	item.Fields = append(item.Fields, field)
 }
 
-// RemoveField removes a field from the item by its ID.
+// DeleteField removes a field from the item by its ID.
 //
 // Parameters:
 // - field: The Field struct to be removed from the item.
 //
 // Returns:
 // - error: An error object if the field with the specified ID is not found.
-func (item *Item) RemoveField(field Field) error {
+func (item *Item) DeleteField(field Field) error {
+	if len(item.Fields) == 0 {
+		return fmt.Errorf("No fields found to remove")
+	}
+
 	for i, f := range item.Fields {
 		if f.ID == field.ID {
 			item.Fields = append(item.Fields[:i], item.Fields[i+1:]...)
@@ -291,14 +319,18 @@ func (item *Item) RemoveField(field Field) error {
 	return fmt.Errorf("Field with ID '%s' not found", field.ID)
 }
 
-// RemoveTag removes a tag from the item by its name.
+// DeleteTag removes a tag from the item by its name.
 //
 // Parameters:
 // - tag: A string representing the name of the tag to remove.
 //
 // Returns:
 // - error: An error object if the tag with the specified name is not found.
-func (item *Item) RemoveTag(tag string) error {
+func (item *Item) DeleteTag(tag string) error {
+	if len(item.Tags) == 0 {
+		return fmt.Errorf("No tags found to remove")
+	}
+
 	for i, t := range item.Tags {
 		if t == tag {
 			item.Tags = append(item.Tags[:i], item.Tags[i+1:]...)
@@ -542,7 +574,7 @@ func (item *Item) AddURL(url ItemURL) {
 	item.URLs = append(item.URLs, url)
 }
 
-// RemoveURLs removes all ItemURLs from the item that match the given Href.
+// DeleteURLs removes all ItemURLs from the item that match the given Href.
 //
 // Parameters:
 // - href: A string representing the Href of the URLs to remove.
@@ -552,7 +584,11 @@ func (item *Item) AddURL(url ItemURL) {
 //
 // Note: The 1Password CLI has a known issue where the last URL cannot be deleted. This method will
 // return an error if attempting to delete the last remaining URL.
-func (item *Item) RemoveURLs(href string) error {
+func (item *Item) DeleteURLs(href string) error {
+	if len(item.URLs) == 0 {
+		return fmt.Errorf("no URLs found to remove")
+	}
+
 	if len(item.URLs) == 1 {
 		return fmt.Errorf("cannot delete the last URL due to a known issue in the 1Password CLI")
 	}
