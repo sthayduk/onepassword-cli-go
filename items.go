@@ -320,6 +320,20 @@ func (item *Item) DeleteField(field Field) error {
 	return fmt.Errorf("Field with ID '%s' not found", field.ID)
 }
 
+func (item *Item) UpdateField(field Field) error {
+	if len(item.Fields) == 0 {
+		return fmt.Errorf("No fields found to update")
+	}
+
+	for i, f := range item.Fields {
+		if f.ID == field.ID {
+			item.Fields[i] = field
+			return nil
+		}
+	}
+	return fmt.Errorf("Field with ID '%s' not found", field.ID)
+}
+
 // DeleteTag removes a tag from the item by its name.
 //
 // Parameters:
@@ -407,6 +421,31 @@ func (item *Item) DeleteSection(section Section) error {
 	}
 
 	return nil
+}
+
+// RenameSection updates the label of a specified section within an item.
+// It searches for a section in the item's Sections slice that matches the
+// provided section's ID and Label. If a match is found, the section's label
+// is updated to the newLabel, and the function returns nil. If no matching
+// section is found, an error is returned.
+//
+// Parameters:
+//
+//	section - The Section object to be renamed, identified by its ID and Label.
+//	newLabel - The new label to assign to the section.
+//
+// Returns:
+//
+//	error - Returns nil if the section is successfully renamed, or an error
+//	        if the section is not found in the item.
+func (item *Item) RenameSection(section Section, newLabel string) error {
+	for i, sec := range item.Sections {
+		if sec.ID == section.ID && sec.Label == section.Label {
+			item.Sections[i].Label = newLabel
+			return nil
+		}
+	}
+	return fmt.Errorf("Section not found in item")
 }
 
 // AddFieldToSection adds a new field to a specific section in the item.
