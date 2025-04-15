@@ -21,8 +21,6 @@ import (
 // - AttributeVersion: The version of the vault's attributes.
 // - Type: The type of the vault, e.g., USER_CREATED or SYSTEM_GENERATED.
 type Vault struct {
-	cli *OpCLI `json:"-"` // Reference to the OpCLI instance for update operations
-
 	ID               string `json:"id"`
 	Name             string `json:"name"`
 	ContentVersion   int    `json:"content_version"`
@@ -105,6 +103,14 @@ func (cli *OpCLI) GetVaultDetails() (*[]Vault, error) {
 	}
 
 	// Set the cli reference for each vault
+	// This is necessary for operations that require the cli context
+	// such as updating the vault icon
+	// or any other operations that may be added in the future
+	for i := range vaults {
+		vaults[i].cli = cli
+	}
+
+	// Set the cli reference for each vault
 	for i := range vaults {
 		vaults[i].cli = cli
 	}
@@ -134,9 +140,6 @@ func (cli *OpCLI) getVaultDetails(identifier string) (*Vault, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	// Set the cli reference for the vault
-	vault.cli = cli
 
 	return &vault, nil
 }
@@ -353,247 +356,6 @@ func (cli *OpCLI) UpdateVaultIcon(vaultID string, icon VaultIcon) error {
 	_, err := cli.ExecuteOpCommand("vault", "edit", vaultID, "--icon", string(icon))
 	if err != nil {
 		return fmt.Errorf("failed to update vault icon: %w", err)
-	}
-
-	return nil
-}
-
-// GrantUserPermission grants a specific permission to a user for the current vault.
-//
-// This method validates the user and resolves the permission string, then executes the "vault user grant" command
-// using the 1Password CLI to grant the specified permission to the user.
-//
-// Parameters:
-// - user: The User struct representing the user to grant permission to.
-// - permission: The Permission struct representing the permission to grant.
-//
-// Returns:
-// - error: An error object if the operation fails.
-func (vault *Vault) GrantUserPermission(user User, permission Permission) error {
-	// Check if the user is valid
-	if user.ID == "" {
-		return errors.New("invalid user: user ID cannot be empty")
-	}
-
-	// Resolve the permission string using ResolvePermissions
-	resolvedPermissions := ResolvePermissions(permission)
-
-	// Execute the command to grant permissions
-	_, err := vault.cli.ExecuteOpCommand(
-		"vault", "user", "grant",
-		"--vault", vault.ID,
-		"--user", user.ID,
-		"--permissions", resolvedPermissions,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to grant permissions: %w", err)
-	}
-
-	return nil
-}
-
-// RevokeUserPermission revokes a specific permission from a user for the current vault.
-//
-// This method validates the user and resolves the permission string, then executes the "vault user revoke" command
-// using the 1Password CLI to revoke the specified permission from the user.
-//
-// Parameters:
-// - user: The User struct representing the user to revoke permission from.
-// - permission: The Permission struct representing the permission to revoke.
-//
-// Returns:
-// - error: An error object if the operation fails.
-func (vault *Vault) RevokeUserPermission(user User, permission Permission) error {
-	// Check if the user is valid
-	if user.ID == "" {
-		return errors.New("invalid user: user ID cannot be empty")
-	}
-
-	// Resolve the permission string using ResolvePermissions
-	resolvedPermissions := ResolvePermissions(permission)
-
-	// Execute the command to revoke permissions
-	_, err := vault.cli.ExecuteOpCommand(
-		"vault", "user", "revoke",
-		"--vault", vault.ID,
-		"--user", user.ID,
-		"--permissions", resolvedPermissions,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to revoke permissions: %w", err)
-	}
-
-	return nil
-}
-
-// GrantGroupPermission grants a specific permission to a group for the current vault.
-//
-// This method validates the group and resolves the permission string, then executes the "vault group grant" command
-// using the 1Password CLI to grant the specified permission to the group.
-//
-// Parameters:
-// - group: The Group struct representing the group to grant permission to.
-// - permission: The Permission struct representing the permission to grant.
-//
-// Returns:
-// - error: An error object if the operation fails.
-func (vault *Vault) GrantGroupPermission(group Group, permission Permission) error {
-	// Check if the group is valid
-	if group.ID == "" {
-		return errors.New("invalid group: group ID cannot be empty")
-	}
-
-	// Resolve the permission string using ResolvePermissions
-	resolvedPermissions := ResolvePermissions(permission)
-
-	// Execute the command to grant permissions
-	_, err := vault.cli.ExecuteOpCommand(
-		"vault", "group", "grant",
-		"--vault", vault.ID,
-		"--group", group.ID,
-		"--permissions", resolvedPermissions,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to grant permissions: %w", err)
-	}
-
-	return nil
-}
-
-// RevokeGroupPermission revokes a specific permission from a group for the current vault.
-//
-// This method validates the group and resolves the permission string, then executes the "vault group revoke" command
-// using the 1Password CLI to revoke the specified permission from the group.
-//
-// Parameters:
-// - group: The Group struct representing the group to revoke permission from.
-// - permission: The Permission struct representing the permission to revoke.
-//
-// Returns:
-// - error: An error object if the operation fails.
-func (vault *Vault) RevokeGroupPermission(group Group, permission Permission) error {
-	// Check if the group is valid
-	if group.ID == "" {
-		return errors.New("invalid group: group ID cannot be empty")
-	}
-
-	// Resolve the permission string using ResolvePermissions
-	resolvedPermissions := ResolvePermissions(permission)
-
-	// Execute the command to revoke permissions
-	_, err := vault.cli.ExecuteOpCommand(
-		"vault", "group", "revoke",
-		"--vault", vault.ID,
-		"--group", group.ID,
-		"--permissions", resolvedPermissions,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to revoke permissions: %w", err)
-	}
-
-	return nil
-}
-
-// Delete deletes the current vault.
-//
-// This method executes the "vault delete" command using the 1Password CLI to delete the current vault.
-//
-// Returns:
-// - error: An error object if the operation fails.
-func (vault *Vault) Delete() error {
-	// Execute the command to delete the vault
-	_, err := vault.cli.ExecuteOpCommand("vault", "delete", vault.ID)
-	if err != nil {
-		return fmt.Errorf("failed to delete vault: %w", err)
-	}
-
-	return nil
-}
-
-// SetName updates the name of the current vault.
-//
-// This method validates the new name and executes the "vault edit" command using the 1Password CLI to update the vault's name.
-//
-// Parameters:
-// - name: The new name to set for the vault.
-//
-// Returns:
-// - error: An error object if the operation fails.
-func (vault *Vault) SetName(name string) error {
-	if name == "" {
-		return errors.New("name cannot be empty")
-	}
-
-	args := []string{"vault", "edit", vault.ID, "--name", name}
-	_, err := vault.cli.ExecuteOpCommand(args...)
-	if err != nil {
-		return fmt.Errorf("failed to edit vault name: %w", err)
-	}
-
-	return nil
-}
-
-// SetDescription updates the description of the current vault.
-//
-// This method executes the "vault edit" command using the 1Password CLI to update the vault's description.
-//
-// Parameters:
-// - description: The new description to set for the vault.
-//
-// Returns:
-// - error: An error object if the operation fails.
-func (vault *Vault) SetDescription(description string) error {
-	args := []string{"vault", "edit", vault.ID, "--description", description}
-	_, err := vault.cli.ExecuteOpCommand(args...)
-	if err != nil {
-		return fmt.Errorf("failed to edit vault description: %w", err)
-	}
-
-	return nil
-}
-
-// SetIcon updates the icon of the current vault.
-//
-// This method validates the new icon and executes the "vault edit" command using the 1Password CLI to update the vault's icon.
-//
-// Parameters:
-// - icon: The new icon to set for the vault. Must be a valid VaultIcon.
-//
-// Returns:
-// - error: An error object if the operation fails.
-func (vault *Vault) SetIcon(icon VaultIcon) error {
-	if icon == "" {
-		return errors.New("icon cannot be empty")
-	}
-
-	args := []string{"vault", "edit", vault.ID, "--icon", string(icon)}
-	_, err := vault.cli.ExecuteOpCommand(args...)
-	if err != nil {
-		return fmt.Errorf("failed to edit vault icon: %w", err)
-	}
-
-	return nil
-}
-
-// SetTravelMode sets the Travel Mode status for the current vault.
-//
-// This method executes the "vault edit" command using the 1Password CLI to update the Travel Mode status of the vault.
-//
-// Parameters:
-// - travelModeOn: A boolean value indicating whether to turn Travel Mode on (true) or off (false).
-//
-// Returns:
-// - error: An error object if the operation fails.
-func (vault *Vault) SetTravelMode(travelModeOn bool) error {
-	mode := "off"
-	if travelModeOn {
-		mode = "on"
-	}
-
-	args := []string{"vault", "edit", vault.ID, "--travel-mode", mode}
-	_, err := vault.cli.ExecuteOpCommand(args...)
-	if err != nil {
-		return fmt.Errorf("failed to edit vault travel mode: %w", err)
 	}
 
 	return nil
