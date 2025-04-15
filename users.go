@@ -96,6 +96,15 @@ func (cli *OpCLI) GetUserByName(userName string) (*User, error) {
 	return cli.getUser(userName)
 }
 
+// GetUserByEmail retrieves a user by their email address.
+// It validates the email format before attempting to fetch the user.
+//
+// Parameters:
+//   - userEmail: The email address of the user to retrieve.
+//
+// Returns:
+//   - A pointer to the User object if found.
+//   - An error if the email format is invalid or if the user cannot be retrieved.
 func (cli *OpCLI) GetUserByEmail(userEmail string) (*User, error) {
 	// Validate the email format
 	if !isValidEmail(userEmail) {
