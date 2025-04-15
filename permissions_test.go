@@ -29,7 +29,7 @@ func TestResolvePermissions(t *testing.T) {
 		{
 			name:       "Permission not in dependencies map",
 			permission: PermissionMoveItems,
-			expected:   "move_items",
+			expected:   "view_items,edit_items,archive_items,view_and_copy_passwords,view_item_history,copy_and_share_items",
 		},
 	}
 
