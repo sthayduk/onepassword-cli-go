@@ -14,7 +14,7 @@ func main() {
 
 	// Sign in to 1Password
 	ctx := context.Background()
-	account, err := cli.GetAccountDetailsByEmail("stefan.hayduk@gmail.com")
+	account, err := cli.GetAccountDetailsByEmail("stefan.hayduk@itdesign.at")
 	if err != nil {
 		log.Fatalf("Failed to retrieve account details: %v", err)
 	}

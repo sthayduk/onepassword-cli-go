@@ -24,7 +24,7 @@ type Group struct {
 // Returns:
 //   - ([]Group): A slice of Group objects.
 //   - (error): An error if the operation fails.
-func (cli *OpCLI) ListGroups() ([]Group, error) {
+func (cli *OpCLI) GetGroups() ([]Group, error) {
 
 	output, err := cli.ExecuteOpCommand("group", "list")
 	if err != nil {
@@ -56,7 +56,7 @@ func (cli *OpCLI) ListGroups() ([]Group, error) {
 //   - (error): An error if the operation fails.
 func (cli *OpCLI) getGroup(groupID string) (*Group, error) {
 	// Execute the command to get a group by ID
-	output, err := cli.ExecuteOpCommand("group", "get ", groupID)
+	output, err := cli.ExecuteOpCommand("group", "get", groupID)
 	if err != nil {
 		return nil, err
 	}

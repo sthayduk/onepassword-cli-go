@@ -193,7 +193,7 @@ func (cli *OpCLI) CreateVault(name, description string, icon VaultIcon, adminAcc
 	}
 
 	// Execute the command to create a new vault
-	output, err := cli.ExecuteOpCommand("vault", "create", "--name", name, "--description", description, "--icon", string(icon), "--allow-admins-to-manage", fmt.Sprintf("%t", adminAccess))
+	output, err := cli.ExecuteOpCommand("vault", "create", name, "--description", description, "--icon", string(icon), "--allow-admins-to-manage", fmt.Sprintf("%t", adminAccess))
 	if err != nil {
 		return nil, err
 	}

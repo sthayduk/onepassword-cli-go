@@ -1,6 +1,6 @@
 # onepassword-cli-go
 
-`onepassword-cli-go` is a Go library for interacting with the 1Password CLI. It provides a set of utilities to manage accounts, items, and vaults programmatically, enabling seamless integration with 1Password in your Go applications.
+`onepassword-cli-go` is a Go library for interacting with the 1Password CLI. It provides a set of utilities to manage accounts, items, vaults, groups, and permissions programmatically, enabling seamless integration with 1Password in your Go applications.
 
 ## Features
 
@@ -22,6 +22,16 @@
   - Represent and interact with 1Password vaults.
   - Retrieve vault details by ID or name.
   - Validate vault IDs and update vault icons.
+  - Create, delete, and update vaults.
+
+- **Group Management**:
+  - List, create, and delete groups.
+  - Add and remove members or managers from groups.
+  - Update group names and descriptions.
+
+- **Permission Management**:
+  - Define and resolve granular permissions for items and vaults.
+  - Manage dependencies between permissions.
 
 - **CLI Integration**:
   - Execute 1Password CLI commands with support for interactive and non-interactive modes.
@@ -156,36 +166,6 @@ if err != nil {
 log.Println("Section deleted successfully!")
 ```
 
-#### Add a Field to a Section
-
-```go
-field := onepassword.Field{
-    ID:      "field-id",
-    Label:   "Example Field",
-    Value:   "example_value",
-    Type:    onepassword.FieldTypeString,
-    Purpose: onepassword.FieldPurposeNotes,
-}
-
-err := item.AddFieldToSection(section, field)
-if err != nil {
-    log.Fatalf("Failed to add field: %v", err)
-}
-
-log.Println("Field added successfully!")
-```
-
-#### Delete a Field from a Section
-
-```go
-err := item.DeleteFieldFromSection(section, field)
-if err != nil {
-    log.Fatalf("Failed to delete field: %v", err)
-}
-
-log.Println("Field deleted successfully!")
-```
-
 #### Add and Remove URLs
 
 Add a URL to an item:
@@ -220,35 +200,6 @@ if err := item.Save(); err != nil {
 log.Println("Removed URL from item.")
 ```
 
-#### Save and Delete Items
-
-Save an item:
-
-```go
-if err := item.Save(); err != nil {
-    log.Fatalf("Failed to save item: %v", err)
-}
-
-log.Println("Item saved successfully!")
-```
-
-Delete an item:
-
-```go
-if err := item.Delete(); err != nil {
-    log.Fatalf("Failed to delete item: %v", err)
-}
-
-log.Println("Item deleted successfully!")
-```
-
-#### Add Tags to an Item
-
-```go
-item.AddTag("example-tag")
-log.Println("Tag added successfully!")
-```
-
 ### Vault Management
 
 Retrieve vault details:
@@ -276,15 +227,30 @@ if err != nil {
 log.Printf("Vault Name: %s, Items: %d", vault.Name, vault.Items)
 ```
 
-Update a vault icon:
+### Group Management
+
+List all groups:
 
 ```go
-err := cli.UpdateVaultIcon(vaultID, onepassword.IconTreasureChest)
+groups, err := cli.ListGroups()
 if err != nil {
-    log.Fatalf("Failed to update vault icon: %v", err)
+    log.Fatalf("Failed to list groups: %v", err)
 }
 
-log.Println("Vault icon updated successfully!")
+for _, group := range groups {
+    log.Printf("Group: %s (%s)", group.Name, group.ID)
+}
+```
+
+Create a new group:
+
+```go
+group, err := cli.CreateGroup("Example Group", "This is an example group.")
+if err != nil {
+    log.Fatalf("Failed to create group: %v", err)
+}
+
+log.Printf("Created group: %s (%s)", group.Name, group.ID)
 ```
 
 ## Development
@@ -295,6 +261,8 @@ log.Println("Vault icon updated successfully!")
 - `client.go`: Provides the core CLI integration and command execution logic.
 - `items.go`: Defines structures and utilities for managing 1Password items.
 - `vaults.go`: Contains functions for vault-related operations.
+- `groups.go`: Manages groups and their members.
+- `permissions.go`: Handles permission definitions and dependencies.
 - `examples/`: Contains example programs demonstrating library usage.
 - `go.mod`: Specifies module dependencies.
 

@@ -67,7 +67,7 @@ func (cli *OpCLI) ListUsers() ([]User, error) {
 
 func (cli *OpCLI) getUser(userID string) (*User, error) {
 	// Execute the command to get a user by ID
-	output, err := cli.ExecuteOpCommand("user", "get ", userID)
+	output, err := cli.ExecuteOpCommand("user", "get", userID)
 	if err != nil {
 		return nil, err
 	}

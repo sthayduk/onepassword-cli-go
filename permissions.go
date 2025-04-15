@@ -43,6 +43,7 @@ var PermissionDependencies = PermissionDependenciesMap{
 	PermissionExportItems:          {PermissionExportItems, PermissionViewItemHistory, PermissionViewAndCopyPasswords, PermissionViewItems},
 	PermissionCopyAndShareItems:    {PermissionCopyAndShareItems, PermissionViewItemHistory, PermissionViewAndCopyPasswords, PermissionViewItems},
 	PermissionPrintItems:           {PermissionPrintItems, PermissionViewItemHistory, PermissionViewAndCopyPasswords, PermissionViewItems},
+	PermissionMoveItems:            {PermissionViewItems, PermissionEditItems, PermissionArchiveItems, PermissionViewAndCopyPasswords, PermissionViewItemHistory, PermissionCopyAndShareItems},
 }
 
 // ResolvePermissions generates a string of permissions for a given permission key in the PermissionDependenciesMap.
