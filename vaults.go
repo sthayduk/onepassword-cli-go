@@ -84,10 +84,13 @@ const (
 
 // GetVaultDetails retrieves a list of all vaults using the 1Password CLI.
 //
+// This method executes the "vault list" command using the 1Password CLI to fetch details of all vaults.
+// It unmarshals the JSON output into a slice of Vault structs and sets the CLI reference for each vault.
+//
 // Returns:
-// - []Vault: A slice of Vault structs containing details of each vault.
+// - *[]Vault: A pointer to a slice of Vault structs containing details of each vault.
 // - error: An error object if the operation fails.
-func (cli *OpCLI) GetVaultDetails() ([]Vault, error) {
+func (cli *OpCLI) GetVaultDetails() (*[]Vault, error) {
 	output, err := cli.ExecuteOpCommand("vault", "list")
 	if err != nil {
 		return nil, err
@@ -99,10 +102,26 @@ func (cli *OpCLI) GetVaultDetails() ([]Vault, error) {
 		return nil, err
 	}
 
-	return vaults, nil
+	// Set the cli reference for each vault
+	// This is necessary for operations that require the cli context
+	// such as updating the vault icon
+	// or any other operations that may be added in the future
+	for i := range vaults {
+		vaults[i].cli = cli
+	}
+
+	// Set the cli reference for each vault
+	for i := range vaults {
+		vaults[i].cli = cli
+	}
+
+	return &vaults, nil
 }
 
 // getVaultDetails retrieves the details of a specific vault by its identifier.
+//
+// This method executes the "vault get" command using the 1Password CLI to fetch details of a specific vault.
+// It unmarshals the JSON output into a Vault struct and sets the CLI reference for the vault.
 //
 // Parameters:
 // - identifier: The unique identifier or name of the vault.
@@ -127,6 +146,8 @@ func (cli *OpCLI) getVaultDetails(identifier string) (*Vault, error) {
 
 // GetVaultDetailsByName retrieves the details of a vault by its name.
 //
+// This method is a wrapper around getVaultDetails, allowing retrieval of vault details using the vault's name.
+//
 // Parameters:
 // - vaultName: The name of the vault.
 //
@@ -138,6 +159,8 @@ func (cli *OpCLI) GetVaultDetailsByName(vaultName string) (*Vault, error) {
 }
 
 // GetVaultDetailsByID retrieves the details of a vault by its ID.
+//
+// This method validates the vault ID format and then calls getVaultDetails to fetch the vault details.
 //
 // Parameters:
 // - vaultID: The unique identifier of the vault.
@@ -153,7 +176,45 @@ func (cli *OpCLI) GetVaultDetailsByID(vaultID string) (*Vault, error) {
 	return cli.getVaultDetails(vaultID)
 }
 
+// CreateVault creates a new vault in 1Password.
+//
+// This method executes the "vault create" command using the 1Password CLI to create a new vault with the specified parameters.
+//
+// Parameters:
+// - name: The name of the new vault.
+// - description: A brief description of the vault's purpose or contents.
+// - icon: The icon to associate with the vault. Must be a valid VaultIcon.
+// - adminAccess: A boolean indicating whether admins are allowed to manage the vault.
+//
+// Returns:
+// - *Vault: A pointer to a Vault struct containing the details of the newly created vault.
+// - error: An error object if the operation fails.
+func (cli *OpCLI) CreateVault(name, description string, icon VaultIcon, adminAccess bool) (*Vault, error) {
+	// Validate the vault name
+	if name == "" {
+		return nil, errors.New("vault name cannot be empty")
+	}
+
+	// Execute the command to create a new vault
+	output, err := cli.ExecuteOpCommand("vault", "create", "--name", name, "--description", description, "--icon", string(icon), "--allow-admins-to-manage", fmt.Sprintf("%t", adminAccess))
+	if err != nil {
+		return nil, err
+	}
+
+	var vault Vault
+	err = json.Unmarshal(output, &vault)
+	if err != nil {
+		return nil, err
+	}
+
+	vault.cli = cli
+
+	return &vault, nil
+}
+
 // ValidateVaultID validates the format of a vault ID.
+//
+// This method checks if the provided vault ID is a 26-character alphanumeric string.
 //
 // Parameters:
 // - id: The vault ID to validate.
@@ -170,6 +231,9 @@ func ValidateVaultID(id string) error {
 }
 
 // ValidateVault validates all fields of a Vault struct.
+//
+// This method performs comprehensive validation of a Vault struct, including checks for ID format, name, content version,
+// timestamps, item count, description length, and type.
 //
 // Parameters:
 // - vault: The Vault struct to validate.
@@ -223,6 +287,9 @@ func ValidateVault(vault Vault) error {
 }
 
 // UpdateVaultIcon updates the icon of a specified vault.
+//
+// This method validates the vault ID and icon name, then executes the "vault edit" command using the 1Password CLI
+// to update the icon of the specified vault.
 //
 // Parameters:
 // - vaultID: The unique identifier of the vault.
