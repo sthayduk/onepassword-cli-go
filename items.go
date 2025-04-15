@@ -3,6 +3,7 @@ package onepassword
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 )
 
@@ -400,7 +401,7 @@ func (item *Item) DeleteSection(section Section) error {
 
 	for i, sec := range item.Sections {
 		if sec.ID == section.ID {
-			item.Sections = append(item.Sections[:i], item.Sections[i+1:]...)
+			item.Sections = slices.Delete(item.Sections, i, i+1)
 			break
 		}
 	}
