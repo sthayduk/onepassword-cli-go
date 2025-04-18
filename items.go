@@ -1,9 +1,12 @@
 package onepassword
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"os/exec"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -11,11 +14,51 @@ import (
 type Category string
 
 const (
-	CategoryLogin    Category = "LOGIN"
-	CategoryPassword Category = "PASSWORD"
-	CategorySecNote  Category = "SECURE_NOTE"
-	CategoryIdentity Category = "IDENTITY"
+	CategoryAPICredential   Category = "API Credential"
+	CategoryBankAccount     Category = "Bank Account"
+	CategoryCreditCard      Category = "Credit Card"
+	CategoryDatabase        Category = "Database"
+	CategoryDocument        Category = "Document"
+	CategoryDriverLicense   Category = "Driver License"
+	CategoryEmailAccount    Category = "Email Account"
+	CategoryIdentity        Category = "Identity"
+	CategoryLogin           Category = "Login"
+	CategoryMembership      Category = "Membership"
+	CategoryOutdoorLicense  Category = "Outdoor License"
+	CategoryPassport        Category = "Passport"
+	CategoryPassword        Category = "Password"
+	CategoryRewardProgram   Category = "Reward Program"
+	CategorySecureNote      Category = "Secure Note"
+	CategoryServer          Category = "Server"
+	CategorySocialSecurity  Category = "Social Security Number"
+	CategorySoftwareLicense Category = "Software License"
+	CategorySSHKey          Category = "SSH Key"
+	CategoryWirelessRouter  Category = "Wireless Router"
 )
+
+// FormatCategories takes a slice of Category and returns a formatted string representation.
+// If the slice contains only one category, it returns the string representation of that category.
+// If the slice contains multiple categories, it concatenates their string representations
+// with a comma (",") as the separator.
+//
+// Parameters:
+//   - categories: A slice of Category values to format.
+//
+// Returns:
+//
+//	A string representation of the categories, either as a single value or a comma-separated list.
+func FormatCategories(categories []Category) string {
+	if len(categories) == 1 {
+		return string(categories[0])
+	}
+
+	var result []string
+	for _, category := range categories {
+		result = append(result, string(category))
+	}
+
+	return strings.Join(result, ",")
+}
 
 // FieldType represents the type of a field
 type FieldType string
@@ -320,6 +363,16 @@ func (item *Item) DeleteField(field Field) error {
 	return fmt.Errorf("Field with ID '%s' not found", field.ID)
 }
 
+// UpdateField updates an existing field in the Item's Fields slice with the provided field.
+// It searches for a field with a matching ID and replaces it with the new field.
+// If no fields are present in the Item, or if a field with the specified ID is not found,
+// an error is returned.
+//
+// Parameters:
+//   - field: The Field object containing the updated data.
+//
+// Returns:
+//   - error: An error if no fields are present or if the specified field ID is not found.
 func (item *Item) UpdateField(field Field) error {
 	if len(item.Fields) == 0 {
 		return fmt.Errorf("No fields found to update")
@@ -687,6 +740,68 @@ func (cli *OpCLI) GetItems() (*[]Item, error) {
 	return &items, nil
 }
 
+// GetItemsByVault retrieves a list of items from a specified vault using the 1Password CLI.
+// It executes the "item list" command with the provided vault ID and parses the output into a slice of Item objects.
+// Each item in the returned list is associated with the OpCLI instance.
+//
+// Parameters:
+//   - vault: A Vault object representing the vault from which to retrieve items.
+//
+// Returns:
+//   - A pointer to a slice of Item objects retrieved from the specified vault.
+//   - An error if the command execution or JSON unmarshalling fails.
+func (cli *OpCLI) GetItemsByVault(vault Vault) (*[]Item, error) {
+	output, err := cli.ExecuteOpCommand("item", "list", "--vault", vault.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	var items []Item
+	err = json.Unmarshal(output, &items)
+	if err != nil {
+		return nil, err
+	}
+
+	// Populate the cli field for each item
+	for i := range items {
+		items[i].cli = cli
+	}
+
+	return &items, nil
+}
+
+// GetItemsByCategory retrieves a list of items filtered by the specified categories.
+// It executes the "op" CLI command to fetch the items, unmarshals the JSON output
+// into a slice of Item structs, and associates each item with the OpCLI instance.
+//
+// Parameters:
+//   - categories: A slice of Category values to filter the items by.
+//
+// Returns:
+//   - A pointer to a slice of Item structs containing the filtered items.
+//   - An error if the command execution or JSON unmarshaling fails.
+func (cli *OpCLI) GetItemsByCategory(categories []Category) (*[]Item, error) {
+	var items []Item
+
+	categoryString := FormatCategories(categories)
+	output, err := cli.ExecuteOpCommand("item", "list", "--category", categoryString)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(output, &items) // Unmarshal the output into items
+	if err != nil {
+		return nil, err
+	}
+
+	// Populate the cli field for each item
+	for i := range items {
+		items[i].cli = cli
+	}
+
+	return &items, nil
+}
+
 // getItem retrieves the details of a specific item by its identifier.
 //
 // Parameters:
@@ -789,4 +904,125 @@ func (cli *OpCLI) GetItemTemplates() (*[]ItemTemplate, error) {
 	}
 
 	return &itemTemplates, nil
+}
+
+// CreateItem creates a new item in the 1Password vault using the "op item create" command.
+// It accepts an Item object and a boolean flag indicating whether to generate a password.
+//
+// Parameters:
+//   - item: A pointer to the Item struct representing the item to be created. The ID field
+//     of the item must be empty for new items.
+//   - genPassword: A boolean flag indicating whether to generate a password for the item.
+//
+// Returns:
+//   - A pointer to the created Item struct populated with the details of the newly created item.
+//   - An error if the operation fails, such as when the item ID is not empty, account information
+//     is missing, JSON serialization fails, the "op item create" command fails, or the output
+//     cannot be unmarshaled.
+//
+// Notes:
+//   - The function requires the OpCLI instance to have valid account information (Account.UserUUID).
+//   - The "op" CLI tool must be installed and accessible via the path specified in the OpCLI.Path field.
+func (cli *OpCLI) CreateItem(item *Item, genPassword bool) (*Item, error) {
+
+	if item.ID != "" {
+		return nil, fmt.Errorf("item ID should be empty for new items")
+	}
+
+	if cli.Account == nil || cli.Account.UserUUID == "" {
+		return nil, fmt.Errorf("account information is missing")
+	}
+
+	args := cli.getDefaultArgs()
+
+	jsonData, err := json.Marshal(item)
+	if err != nil {
+		return nil, fmt.Errorf("failed to serialize item to JSON: %w", err)
+	}
+
+	var cmd *exec.Cmd
+	if genPassword {
+		// Generate a password if required
+		cmd = exec.Command(cli.Path, append([]string{"item", "create", "--generate-password"}, args...)...)
+	} else {
+		cmd = exec.Command(cli.Path, append([]string{"item", "create"}, args...)...)
+	}
+	cmd.Stdin = bytes.NewReader(jsonData)
+
+	// Execute the "op item create" command and capture output
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute 'op item create': %w", err)
+	}
+
+	// Unmarshal the output into the createdItem struct
+	var createdItem Item
+	if err := json.Unmarshal(output, &createdItem); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal created item: %w", err)
+	}
+
+	return &createdItem, nil
+}
+
+// deleteItem deletes an item by its ID using the 1Password CLI.
+//
+// Parameters:
+// - itemID: A string representing the unique identifier of the item to delete.
+//
+// Returns:
+// - error: An error object if the operation fails.
+func (cli *OpCLI) deleteItem(item Item) error {
+	if item.ID == "" {
+		return fmt.Errorf("item ID cannot be empty")
+	}
+
+	_, err := cli.ExecuteOpCommand("item", "delete", item.ID)
+	if err != nil {
+		return fmt.Errorf("failed to delete item with ID '%s': %v", item.ID, err)
+	}
+
+	return nil
+}
+
+// updateItemWithStruct updates an existing item in 1Password using the provided Item struct.
+//
+// Parameters:
+// - identifier: The unique identifier or name of the item to update.
+// - item: The Item struct containing the updated item data.
+//
+// Returns:
+// - error: An error object if the operation fails.
+//
+// This method uses the "op item edit" command to update the item.
+func (cli *OpCLI) updateItemWithStruct(item Item) (*Item, error) {
+
+	if cli.Account == nil || cli.Account.UserUUID == "" {
+		return nil, fmt.Errorf("account information is missing")
+	}
+
+	args := cli.getDefaultArgs()
+
+	// Serialize the Item struct to JSON
+	jsonData, err := json.Marshal(item)
+	if err != nil {
+		return nil, fmt.Errorf("failed to serialize item to JSON: %w", err)
+	}
+
+	// Execute the "op item edit" command
+	cmd := exec.Command(cli.Path, append([]string{"item", "edit", item.ID}, args...)...)
+	cmd.Stdin = bytes.NewReader(jsonData)
+
+	// Execute the "op item edit" command and capture output
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute 'op item edit': %w", err)
+	}
+
+	// Unmarshal the output into the updatedItem struct
+	var updatedItem Item
+	if err := json.Unmarshal(output, &updatedItem); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal updated item: %w", err)
+	}
+
+	return &updatedItem, nil
 }

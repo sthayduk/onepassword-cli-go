@@ -11,7 +11,8 @@ import (
 type UserType string
 
 const (
-	UserTypeMember UserType = "MEMBER"
+	UserTypeMember         UserType = "MEMBER"
+	UserTypeServiceAccount UserType = "SERVICE_ACCOUNT"
 )
 
 // UserState represents the state of a user.
@@ -298,4 +299,19 @@ func (user *User) SetName(name string) error {
 	}
 
 	return nil
+}
+
+func (cli *OpCLI) GetMe() (*User, error) {
+
+	output, err := cli.Execute("user", "get", "--me")
+	if err != nil {
+		return nil, err
+	}
+
+	var user User
+	if err := json.Unmarshal(output, &user); err != nil {
+		return nil, fmt.Errorf("failed to parse user details: %v", err)
+	}
+
+	return &user, nil
 }

@@ -3,7 +3,6 @@ package onepassword
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -17,11 +16,12 @@ import (
 
 // OpCLI represents the 1Password CLI executor
 type OpCLI struct {
-	Path        string
-	accesstoken string
-	cache       itemCache
-	logger      slog.Logger
-	Account     *Account
+	Path             string
+	accesstoken      string
+	cache            itemCache
+	logger           slog.Logger
+	isServiceAccount bool
+	Account          *Account
 }
 
 // OpCliError represents an error from the 1Password CLI operations
@@ -349,13 +349,12 @@ func (cli *OpCLI) Execute(args ...string) ([]byte, error) {
 
 	// For other interactive commands, run them directly
 	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	err := cmd.Run()
+	output, err := cmd.Output() // Updated to use Output() instead of Run()
 	if err != nil {
 		return nil, err
 	}
-	return nil, nil
+	return output, nil
 }
 
 // isInteractiveCommand determines if the provided command is an interactive command.
@@ -501,125 +500,4 @@ func (cli *OpCLI) getDefaultArgs() []string {
 		args = append(args, "--format=json")
 	}
 	return args
-}
-
-// updateItemWithStruct updates an existing item in 1Password using the provided Item struct.
-//
-// Parameters:
-// - identifier: The unique identifier or name of the item to update.
-// - item: The Item struct containing the updated item data.
-//
-// Returns:
-// - error: An error object if the operation fails.
-//
-// This method uses the "op item edit" command to update the item.
-func (cli *OpCLI) updateItemWithStruct(item Item) (*Item, error) {
-
-	if cli.Account == nil || cli.Account.UserUUID == "" {
-		return nil, fmt.Errorf("account information is missing")
-	}
-
-	args := cli.getDefaultArgs()
-
-	// Serialize the Item struct to JSON
-	jsonData, err := json.Marshal(item)
-	if err != nil {
-		return nil, fmt.Errorf("failed to serialize item to JSON: %w", err)
-	}
-
-	// Execute the "op item edit" command
-	cmd := exec.Command(cli.Path, append([]string{"item", "edit", item.ID}, args...)...)
-	cmd.Stdin = bytes.NewReader(jsonData)
-
-	// Execute the "op item edit" command and capture output
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute 'op item edit': %w", err)
-	}
-
-	// Unmarshal the output into the updatedItem struct
-	var updatedItem Item
-	if err := json.Unmarshal(output, &updatedItem); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal updated item: %w", err)
-	}
-
-	return &updatedItem, nil
-}
-
-// CreateItem creates a new item in the 1Password vault using the "op item create" command.
-// It accepts an Item object and a boolean flag indicating whether to generate a password.
-//
-// Parameters:
-//   - item: A pointer to the Item struct representing the item to be created. The ID field
-//     of the item must be empty for new items.
-//   - genPassword: A boolean flag indicating whether to generate a password for the item.
-//
-// Returns:
-//   - A pointer to the created Item struct populated with the details of the newly created item.
-//   - An error if the operation fails, such as when the item ID is not empty, account information
-//     is missing, JSON serialization fails, the "op item create" command fails, or the output
-//     cannot be unmarshaled.
-//
-// Notes:
-//   - The function requires the OpCLI instance to have valid account information (Account.UserUUID).
-//   - The "op" CLI tool must be installed and accessible via the path specified in the OpCLI.Path field.
-func (cli *OpCLI) CreateItem(item *Item, genPassword bool) (*Item, error) {
-
-	if item.ID != "" {
-		return nil, fmt.Errorf("item ID should be empty for new items")
-	}
-
-	if cli.Account == nil || cli.Account.UserUUID == "" {
-		return nil, fmt.Errorf("account information is missing")
-	}
-
-	args := cli.getDefaultArgs()
-
-	jsonData, err := json.Marshal(item)
-	if err != nil {
-		return nil, fmt.Errorf("failed to serialize item to JSON: %w", err)
-	}
-
-	var cmd *exec.Cmd
-	if genPassword {
-		// Generate a password if required
-		cmd = exec.Command(cli.Path, append([]string{"item", "create", "--generate-password"}, args...)...)
-	} else {
-		cmd = exec.Command(cli.Path, append([]string{"item", "create"}, args...)...)
-	}
-	cmd.Stdin = bytes.NewReader(jsonData)
-
-	// Execute the "op item create" command and capture output
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute 'op item create': %w", err)
-	}
-
-	// Unmarshal the output into the createdItem struct
-	var createdItem Item
-	if err := json.Unmarshal(output, &createdItem); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal created item: %w", err)
-	}
-
-	return &createdItem, nil
-}
-
-// deleteItem deletes an item by its ID using the 1Password CLI.
-//
-// Parameters:
-// - itemID: A string representing the unique identifier of the item to delete.
-//
-// Returns:
-// - error: An error object if the operation fails.
-func (cli *OpCLI) deleteItem(item Item) error {
-	if item.ID == "" {
-		return fmt.Errorf("item ID cannot be empty")
-	}
-
-	_, err := cli.ExecuteOpCommand("item", "delete", item.ID)
-	if err != nil {
-		return fmt.Errorf("failed to delete item with ID '%s': %v", item.ID, err)
-	}
-
-	return nil
 }
