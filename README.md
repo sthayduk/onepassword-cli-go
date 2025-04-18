@@ -8,6 +8,7 @@
   - Retrieve account details by UUID, email, or URL.
   - Check session validity and expiration.
   - Sign in to accounts with passwordless or password-based authentication.
+  - Sign in with service account accesstoken
 
 - **Item Management**:
   - Define and manage 1Password items, including fields, sections, and URLs.
@@ -108,26 +109,24 @@ log.Println("Signed in successfully!")
 
 ### Item Management
 
-Define and interact with items:
+Define and create an item:
 
 ```go
 item := onepassword.Item{
     Title:    "Example Login",
     Category: onepassword.CategoryLogin,
     Vault: onepassword.Vault{
-        ID:   "vault-id",
+        ID:   "vault-id", // Replace with a valid vault ID
         Name: "Personal",
     },
     Fields: []onepassword.Field{
         {
-            ID:      "username",
             Label:   "Username",
             Value:   "example_user",
             Type:    onepassword.FieldTypeString,
             Purpose: onepassword.FieldPurposeUsername,
         },
         {
-            ID:      "password",
             Label:   "Password",
             Value:   "example_password",
             Type:    onepassword.FieldTypeConcealed,
@@ -136,7 +135,12 @@ item := onepassword.Item{
     },
 }
 
-log.Printf("Created item: %s", item.Title)
+createdItem, err := cli.CreateItem(&item, false) // Set to true to generate a password
+if err != nil {
+    log.Fatalf("Failed to create item: %v", err)
+}
+
+log.Printf("Created item: %s (ID: %s)", createdItem.Title, createdItem.ID)
 ```
 
 #### Add a Section to an Item
@@ -210,7 +214,7 @@ if err != nil {
     log.Fatalf("Failed to retrieve vaults: %v", err)
 }
 
-for _, vault := range vaults {
+for _, vault := range *vaults {
     log.Printf("Vault: %s (%s)", vault.Name, vault.ID)
 }
 ```
@@ -232,7 +236,7 @@ log.Printf("Vault Name: %s, Items: %d", vault.Name, vault.Items)
 List all groups:
 
 ```go
-groups, err := cli.ListGroups()
+groups, err := cli.GetGroups()
 if err != nil {
     log.Fatalf("Failed to list groups: %v", err)
 }
