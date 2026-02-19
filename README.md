@@ -204,6 +204,16 @@ if err := item.Save(); err != nil {
 log.Println("Removed URL from item.")
 ```
 
+#### Persist item changes in 1Password
+
+```go
+// Note: Ensure you call the .Save() method to persist the item to 1Password.
+// Without calling .Save(), the item will only be updated locally and not written to 1Password.
+if err := createdItem.Save(); err != nil {
+    log.Fatalf("Failed to save item: %v", err)
+}
+```
+
 ### Vault Management
 
 Retrieve vault details:

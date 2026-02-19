@@ -8,11 +8,15 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 
 	"golang.org/x/term"
 )
+
+// opVersionPattern matches a valid 1Password CLI version string (e.g., "2.30.0").
+var opVersionPattern = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
 
 // OpCLI represents the 1Password CLI executor
 type OpCLI struct {
@@ -104,84 +108,112 @@ func TestOpCli(opPath string) error {
 	return nil
 }
 
-// VerifyOpExecutable verifies the digital signature of the specified executable file
-// to ensure it is signed by AgileBits Inc. (the developers of 1Password).
+// validateVersionOutput runs "op --version" and validates the output matches
+// a valid 1Password CLI semver pattern. Returns the version string on success.
+func validateVersionOutput(path string) (string, error) {
+	cmd := exec.Command(path, "--version")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to run '%s --version': %v", path, err)
+	}
+
+	version := strings.TrimSpace(string(output))
+	if !opVersionPattern.MatchString(version) {
+		return "", fmt.Errorf("unexpected version output %q: does not match expected 1Password CLI version pattern", version)
+	}
+
+	return version, nil
+}
+
+// VerifyOpExecutable verifies the authenticity of the 1Password CLI executable
+// at the given path.
 //
-// The verification process varies depending on the operating system:
-//   - On macOS, it uses the `codesign` command to check the signature authority.
-//   - On Windows, it uses PowerShell's `Get-AuthenticodeSignature` to validate the signature
-//     and ensure it is signed by AgileBits.
-//   - On Linux, it uses GPG to verify the signature against AgileBits' public GPG key.
+// On all platforms, it first runs "op --version" and validates that the output
+// matches a valid 1Password CLI semver pattern (e.g., "2.30.0").
 //
-// If the verification fails or the executable is not signed by AgileBits, an error is returned.
-// On Linux, if GPG is not available, the function logs a warning and skips the verification.
+// Additional OS-specific checks:
+//   - On macOS, it uses the codesign command to verify the binary is signed
+//     by "Developer ID Application: AgileBits Inc."
+//   - On Windows, it uses PowerShell's Get-AuthenticodeSignature to verify
+//     the Authenticode signature and confirm the signer is AgileBits.
+//   - On Linux, no binary-level signature verification is available. The
+//     function relies on version output validation only and logs a warning.
 //
 // Parameters:
 //   - path: The file path to the executable to be verified.
 //
 // Returns:
-//   - An error if the verification fails or the executable is not signed by AgileBits.
-//     Returns nil if the verification succeeds or is skipped (e.g., on Linux without GPG).
+//   - An error if verification fails. Returns nil if verification succeeds.
 func VerifyOpExecutable(path string) error {
-	if runtime.GOOS == "darwin" {
-		// Use codesign on macOS
-		cmd := exec.Command("codesign", "-d", "-vvv", path)
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("signature verification failed: %v", err)
-		}
-
-		// Check for AgileBits signature
-		outputStr := string(output)
-		if !strings.Contains(outputStr, "Authority=Developer ID Application: AgileBits Inc.") {
-			return fmt.Errorf("invalid signature: not signed by AgileBits")
-		}
-	} else if runtime.GOOS == "windows" {
-		// Use PowerShell Get-AuthenticodeSignature on Windows with publisher check
-		cmd := exec.Command("powershell", "-Command", fmt.Sprintf(`
-			$sig = Get-AuthenticodeSignature '%s'
-			if ($sig.Status -ne 'Valid') { 
-				exit 1 
-			}
-			if ($sig.SignerCertificate.Subject -notlike '*AgileBits*') {
-				exit 1
-			}`, path))
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("signature verification failed or not signed by AgileBits: %v", err)
-		}
-	} else if runtime.GOOS == "linux" {
-		// Check if gpg is available
-		if _, err := exec.LookPath("gpg"); err != nil {
-			slog.Warn("gpg not found, skipping signature verification on Linux")
-			return nil
-		}
-
-		// AgileBits GPG key ID for 1Password packages
-		const agileBitsKeyID = "3FEF9748469ADBE15DA7CA80AC2D62742012EA22"
-
-		// Verify if key is in keyring, if not fetch it
-		checkKey := exec.Command("gpg", "--list-keys", agileBitsKeyID)
-		if err := checkKey.Run(); err != nil {
-			slog.Info("fetching AgileBits GPG key")
-			fetchKey := exec.Command("gpg", "--keyserver", "keyserver.ubuntu.com", "--recv-keys", agileBitsKeyID)
-			if err := fetchKey.Run(); err != nil {
-				return fmt.Errorf("failed to fetch AgileBits GPG key: %v", err)
-			}
-		}
-
-		// Verify signature
-		cmd := exec.Command("gpg", "--verify", path)
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("GPG signature verification failed: %v", err)
-		}
-
-		// Verify it's signed by AgileBits
-		verify := exec.Command("gpg", "--verify", "--debug-level", "1", path)
-		output, _ := verify.CombinedOutput()
-		if !strings.Contains(string(output), agileBitsKeyID) {
-			return fmt.Errorf("invalid signature: not signed by AgileBits")
-		}
+	version, err := validateVersionOutput(path)
+	if err != nil {
+		return fmt.Errorf("version verification failed: %w", err)
 	}
+	slog.Debug("op version verified", "version", version)
+
+	switch runtime.GOOS {
+	case "darwin":
+		if err := verifyDarwinSignature(path); err != nil {
+			return err
+		}
+	case "windows":
+		if err := verifyWindowsSignature(path); err != nil {
+			return err
+		}
+	case "linux":
+		slog.Warn("signature verification is not available for the op binary on Linux; relying on version validation only")
+	default:
+		slog.Warn("signature verification not supported on this platform", "os", runtime.GOOS)
+	}
+
+	return nil
+}
+
+// verifyDarwinSignature checks the macOS code signature of the binary at the
+// given path and verifies it is signed by AgileBits Inc.
+func verifyDarwinSignature(path string) error {
+	cmd := exec.Command("codesign", "-d", "-vvv", path)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("macOS codesign verification failed for %s: %v\nOutput: %s", path, err, string(output))
+	}
+
+	if !strings.Contains(string(output), "Authority=Developer ID Application: AgileBits Inc.") {
+		return fmt.Errorf("invalid macOS signature: binary at %s is not signed by AgileBits Inc.", path)
+	}
+
+	slog.Debug("macOS codesign verification passed", "path", path)
+	return nil
+}
+
+// verifyWindowsSignature checks the Authenticode signature of the binary at
+// the given path using PowerShell and verifies it is signed by AgileBits Inc.
+func verifyWindowsSignature(path string) error {
+	escapedPath := strings.ReplaceAll(path, "'", "''")
+	psScript := fmt.Sprintf(
+		`$sig = Get-AuthenticodeSignature -LiteralPath '%s'; `+
+			`if ($sig.Status -ne 'Valid') { Write-Output "STATUS:$($sig.Status)"; exit 1 }; `+
+			`$subject = $sig.SignerCertificate.Subject; `+
+			`if ($subject -notlike '*AgileBits*') { Write-Output "SUBJECT:$subject"; exit 1 }; `+
+			`Write-Output "OK:$subject"`,
+		escapedPath,
+	)
+
+	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", psScript)
+	output, err := cmd.CombinedOutput()
+	outputStr := strings.TrimSpace(string(output))
+
+	if err != nil {
+		if status, ok := strings.CutPrefix(outputStr, "STATUS:"); ok {
+			return fmt.Errorf("Windows Authenticode verification failed: signature status is %s", status)
+		}
+		if subject, ok := strings.CutPrefix(outputStr, "SUBJECT:"); ok {
+			return fmt.Errorf("Windows Authenticode verification failed: binary is signed by %s, not AgileBits", subject)
+		}
+		return fmt.Errorf("Windows signature verification failed for %s: %v\nOutput: %s", path, err, outputStr)
+	}
+
+	slog.Debug("Windows Authenticode verification passed", "path", path, "signer", outputStr)
 	return nil
 }
 

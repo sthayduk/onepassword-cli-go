@@ -1002,6 +1002,13 @@ func (cli *OpCLI) updateItemWithStruct(item Item) (*Item, error) {
 
 	args := cli.getDefaultArgs()
 
+	// Bug in the 1Password CLI: The Vault Name is inconsistent reading and writing on Business Accounts
+	// Vault Names have changed from Private to Employee and it seems that the CLI is not able to handle this
+	// This is a workaround to ignore the Vault name, because it is not needed for the update
+	if item.Vault.Name != "" {
+		item.Vault.Name = ""
+	}
+
 	// Serialize the Item struct to JSON
 	jsonData, err := json.Marshal(item)
 	if err != nil {
